@@ -1,0 +1,33 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Go
+bin/
+dist/
+coverage/
+*.out
+*.test
+
+# Local env files
+.env
+.env.local
+.env.*.local
+web/.env.local
+
+# Node / Next.js
+node_modules/
+web/node_modules/
+.next/
+web/.next/
+out/
+web/out/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
