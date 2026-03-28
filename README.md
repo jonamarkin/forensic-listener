@@ -1,33 +1,304 @@
-# forensic-listener
+# Forensic Listener
 
-Ethereum forensic monitoring with:
+## Database Systems Project
 
-- Go ingestion and API services
-- PostgreSQL for the relational and case-management surface
-- Neo4j for transaction flow and path tracing
-- pgvector for contract and behavior similarity
-- a new routed Next.js dashboard in [`web/`](/home/ato/forensic-listener/web)
+Forensic Listener is an Ethereum monitoring and investigation system built as a
+database-centric application. It ingests live Ethereum transaction activity,
+stores it in multiple specialized data models, and exposes the results through a
+Go API and a routed Next.js dashboard.
 
-## Frontend stack
+The core idea of the project is that a single database model is not enough for
+all forensic workloads:
 
-The new web app is scaffolded with the current Next.js App Router and shadcn-style component setup:
+- a relational database is best for ledger data, integrity, and case records
+- a graph database is best for multi-hop transaction tracing
+- a vector database extension is best for similarity search over contracts and
+  account behavior
 
-- `next@15.5.3`
-- `react@19.1.1`
-- `shadcn@3.2.1`
-- `tailwindcss@4.1.13`
+The dashboard exists to demonstrate those database capabilities. The primary
+academic focus of the project is the storage design, schema design, indexing,
+constraints, and query model.
 
-## Run locally
+## Project Objective
 
-### 1. Start the Go backend
+This project answers a practical database question:
+
+> How should an Ethereum forensic system model data when the application needs
+> structured ledger queries, graph traversals, and similarity search at the
+> same time?
+
+To answer that, the system uses a polyglot persistence design:
+
+- PostgreSQL for the relational source of truth
+- Neo4j for flow tracing and circular-path analysis
+- pgvector inside PostgreSQL for similarity search
+
+## Why This Is a Database Project
+
+The most important work in this repository is not UI styling; it is the design
+of the underlying data layer:
+
+- normalized relational schema with primary keys and foreign keys
+- integrity constraints and uniqueness rules
+- indexes for common forensic queries
+- queue modeling for enrichment jobs
+- graph modeling for address-to-address traversal
+- vector modeling for approximate similarity
+- controlled use of semi-structured data with `JSONB`
+
+In other words, this is a database systems project presented through a forensic
+application domain.
+
+## Database Architecture
+
+| Store | Role in the system | Why it is used |
+| --- | --- | --- |
+| PostgreSQL | Main transactional store | Best fit for accounts, transactions, flags, notes, tags, and metadata with integrity guarantees |
+| Neo4j | Transaction-flow graph | Best fit for path queries, hub discovery, and circular flow detection |
+| pgvector | Similarity search inside PostgreSQL | Best fit for contract bytecode similarity and behavioral nearest-neighbor search |
+
+This design was chosen deliberately so that each database technology is used for
+the query pattern it handles best.
+
+## Relational Schema (PostgreSQL)
+
+The PostgreSQL schema is evolved through SQL migrations in [`migrations/`](migrations).
+
+### Core ledger tables
+
+- `accounts`
+  - one row per Ethereum address
+  - primary key: `address`
+  - stores balance, contract flag, and first/last seen timestamps
+- `transactions`
+  - one row per observed Ethereum transaction
+  - primary key: `hash`
+  - foreign keys:
+    - `from_address -> accounts(address)`
+    - `to_address -> accounts(address)`
+  - stores value, gas, gas price, nonce, block number, calldata, and timestamp
+- `forensic_flags`
+  - stores anomalies and findings raised by the forensic logic
+  - links findings back to transactions and/or accounts
+
+### Workflow / enrichment tables
+
+- `enrichment_jobs`
+  - models asynchronous enrichment work as database state
+  - stores status, retry count, lock information, and next availability
+  - demonstrates queue-like processing inside a relational system
+
+### Intelligence / case-management tables
+
+- `known_entities`
+  - curated labels for addresses such as exchange, stablecoin, hub, or mixer
+- `investigator_notes`
+  - free-text analyst notes attached to an address
+- `address_tags`
+  - normalized address-tag pairs with uniqueness enforcement
+- `contract_metadata`
+  - stores ABI, source code, decompiled code, compiler version, and verification
+  - uses `JSONB` for ABI because ABI structure is semi-structured but still
+    naturally attached to a relational entity
+
+### Vector-backed tables stored in PostgreSQL
+
+- `contract_vectors`
+  - bytecode and a `vector(128)` embedding for contract similarity
+- `account_behavior_vectors`
+  - a `vector(128)` embedding plus `features JSONB` for behavioral similarity
+
+## Relational Integrity and Indexing
+
+The schema demonstrates several important database design principles:
+
+- primary keys on business identifiers:
+  - `accounts.address`
+  - `transactions.hash`
+- foreign-key relationships from transactions, notes, tags, and metadata back
+  to `accounts`
+- domain constraints:
+  - `forensic_flags.severity IN ('low', 'medium', 'high')`
+  - `known_entities.risk_level IN ('none', 'low', 'medium', 'high')`
+- deduplication constraints:
+  - unique forensic signal index on `(tx_hash, address, flag_type)`
+  - unique tag constraint on `(address, tag)`
+- targeted indexes for expected access patterns:
+  - `transactions(from_address)`
+  - `transactions(to_address)`
+  - `transactions(block_number)`
+  - `forensic_flags(address)`
+  - `known_entities(entity_type, is_hub, risk_level)`
+  - descending indexes for notes/tags recency
+
+These choices are central to the project because the application must support
+both ingestion and investigation efficiently.
+
+## Graph Model (Neo4j)
+
+Neo4j is used for the part of the workload that SQL handles poorly: multi-hop
+transaction tracing.
+
+### Graph representation
+
+- nodes: `Account`
+- node key property: `address`
+- relationships: directed transfer edges between accounts
+
+### Why Neo4j is necessary
+
+Neo4j is used for:
+
+- expanding the neighborhood of an address
+- tracing funds multiple hops outward
+- finding return paths
+- detecting circular flows
+- identifying high-degree hubs
+
+These are graph problems, not simple relational lookups. The project therefore
+uses a graph database where graph queries are a first-class operation.
+
+### Graph integrity
+
+The implementation also enforces uniqueness of account nodes by address and
+contains duplicate-repair logic so that graph traversals operate on a clean
+entity model.
+
+## Vector Search (pgvector)
+
+The project uses the `vector` PostgreSQL extension to add similarity search
+without introducing a separate vector service.
+
+### Two vector use cases are implemented
+
+1. Contract bytecode similarity
+   - stored in `contract_vectors`
+   - used to find contracts with similar deployed bytecode
+
+2. Behavioral account similarity
+   - stored in `account_behavior_vectors`
+   - used to compare accounts by activity pattern rather than exact address
+
+### Why pgvector was chosen
+
+- keeps vector search inside the same transactional database used for the rest
+  of the structured intelligence layer
+- simplifies deployment
+- makes it easy to join similarity results back to relational metadata
+
+## Why There Is No MongoDB
+
+MongoDB was intentionally not added.
+
+The project still supports semi-structured data, but it does so selectively:
+
+- `contract_metadata.abi` uses `JSONB`
+- `account_behavior_vectors.features` uses `JSONB`
+
+That design keeps the architecture simpler while still supporting variable
+document-like structures. For this project, PostgreSQL plus `JSONB` is enough,
+so a fourth datastore would add operational complexity without adding meaningful
+academic value.
+
+## Representative Database Operations
+
+This system demonstrates different classes of database operations:
+
+### PostgreSQL
+
+- recent transaction ledger queries
+- top active addresses
+- account dossier aggregation
+- case notes and tags
+- enrichment queue management
+- alert and metrics retrieval
+
+### Neo4j
+
+- graph neighborhood expansion
+- transaction trace paths
+- circular flow detection
+- hub discovery
+
+### pgvector
+
+- nearest-neighbor contract similarity
+- nearest-neighbor behavioral similarity between accounts
+
+## Application Features That Demonstrate the Databases
+
+The frontend is organized to expose the database capabilities clearly:
+
+- `/overview`
+  - relational summaries, metrics, enrichment state, recent activity
+- `/graph`
+  - graph traversal, path tracing, hub analysis
+- `/alerts`
+  - forensic flags, velocity spikes, circular flow review
+- `/accounts/[address]`
+  - dossier view with relational aggregates, notes, tags, behavior profile
+- `/contracts/[address]`
+  - contract metadata and vector similarity
+
+The dashboard is therefore a visualization layer over the underlying database
+operations rather than the main focus of the project itself.
+
+## Technology Stack
+
+### Backend
+
+- Go `1.26.1`
+- Chi router for the API
+- PostgreSQL via `pgx`
+- Neo4j Go driver
+- `golang-migrate` for schema migrations
+
+### Frontend
+
+- Next.js `15.5.3`
+- React `19.1.1`
+- shadcn-style component setup
+- Tailwind CSS `4`
+
+## Running the Project Locally
+
+### Prerequisites
+
+- Go `1.26.1`
+- Node.js with `pnpm`
+- PostgreSQL with the `vector` extension enabled
+- Neo4j
+- an Ethereum websocket endpoint
+
+### Default local configuration
+
+The application defaults are:
+
+- PostgreSQL:
+  - `postgres://forensic:forensic@localhost:5432/blockchain`
+- PostgreSQL migrations:
+  - `pgx5://forensic:forensic@localhost:5432/blockchain`
+- Neo4j:
+  - `bolt://localhost:7687`
+  - user: `neo4j`
+  - password: `forensic123`
+- Ethereum websocket:
+  - `ws://localhost:8546`
+- Go API:
+  - `:8080`
+- Next.js dashboard:
+  - `:3000`
+
+### Start the backend
 
 ```bash
 go run main.go
 ```
 
-The API listens on `http://localhost:8080` by default.
+This runs migrations automatically, connects PostgreSQL, pgvector, Neo4j, and
+the Ethereum websocket, and then starts the API.
 
-### 2. Start the new Next.js dashboard
+### Start the frontend
 
 ```bash
 cd web
@@ -42,23 +313,11 @@ Then open:
 http://localhost:3000
 ```
 
-### 3. Optional backend auth
+The root page redirects to `/overview`.
 
-If your Go API is protected with `API_AUTH_TOKEN`, set the same token in:
+### Optional frontend environment
 
-```bash
-web/.env.local
-```
-
-```env
-FORENSIC_API_AUTH_TOKEN=your-token-here
-```
-
-The Next app proxies browser-side note/tag writes through its own route handlers, so the browser does not need to know the backend token directly.
-
-## Environment
-
-The Next app reads:
+The Next.js frontend reads:
 
 ```env
 FORENSIC_API_BASE_URL=http://localhost:8080
@@ -66,85 +325,57 @@ FORENSIC_API_AUTH_TOKEN=
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ```
 
-`FORENSIC_API_BASE_URL` is the important one for the server-side dashboard fetches and proxy route.
+If backend auth is enabled with `API_AUTH_TOKEN`, set the matching token in
+`web/.env.local` as `FORENSIC_API_AUTH_TOKEN`.
 
-## New dashboard routes
+## Repository Structure
 
-The new dashboard is split into dedicated investigative surfaces:
+- `main.go`
+  - application entrypoint
+- `migrations/`
+  - relational schema evolution
+- `store/`
+  - PostgreSQL, Neo4j, and pgvector data-access logic
+- `forensics/`
+  - anomaly and circular-flow detection logic
+- `api/`
+  - Go API
+- `web/`
+  - Next.js dashboard
 
-- `/overview`
-- `/graph`
-- `/alerts`
-- `/accounts/[address]`
-- `/contracts/[address]`
+## Database Concepts Demonstrated
 
-This replaces the old “everything on one page” feel with route-specific workflows:
+From a database-systems perspective, this project demonstrates:
 
-- Overview: pipeline health, throughput, recent activity
-- Graph: transaction flow canvas and hub/path tracing
-- Alerts: velocity spikes and circular flow review
-- Account dossier: notes, tags, behavior, counterparties, velocity
-- Contract intelligence: bytecode, artifacts, and similarity
+- schema design
+- normalization
+- key and foreign-key enforcement
+- constraint design
+- indexing strategy
+- semi-structured storage with `JSONB`
+- queue/state modeling inside SQL
+- graph modeling and traversal
+- vector similarity search
+- multi-model data architecture
+- migration-driven schema evolution
 
-## Live behavior
+## Limitations and Future Work
 
-The new Next dashboard now uses a shared live feed:
+If this project were extended further, the next database-focused improvements
+would be:
 
-- Overview and Alerts hydrate from the backend SSE endpoint at `/stream/events`
-- heavier analytics on those pages refresh in the background on a timer
-- graph, account, and contract routes remain request-driven on navigation or refresh
+- partitioning very large transaction tables by block or time
+- adding benchmark results for common queries
+- broadening the curated entity catalog
+- extending graph labels and relationship types beyond raw transfers
+- improving similarity feature engineering for account behavior
 
-That means the monitoring surfaces feel live, while the deeper investigation routes stay cheaper and more focused.
+## Conclusion
 
-## Internet access
+Forensic Listener is best understood as a database architecture project applied
+to blockchain forensics.
 
-Yes, the dashboard can be exposed over the internet, but the safest setup is:
-
-1. Expose only the Next.js app publicly.
-2. Keep the Go API on a private port.
-3. Keep PostgreSQL, Neo4j, and the Ethereum node private.
-4. Let the Next app talk to the Go API over the private network or same host.
-
-### Good production shape
-
-- public: Next.js app behind HTTPS
-- private: Go API on `127.0.0.1:8080`
-- private: Postgres, Neo4j, Ethereum websocket
-
-### Example with Caddy
-
-```caddy
-forensics.example.com {
-    reverse_proxy 127.0.0.1:3000
-}
-```
-
-In that setup:
-
-- the public browser hits only the Next app
-- the Next app uses `FORENSIC_API_BASE_URL=http://127.0.0.1:8080`
-- the backend stores stay off the public internet
-
-### Fast demo options
-
-For a quick external demo, tunnel the Next app:
-
-- Cloudflare Tunnel
-- Tailscale Funnel
-- ngrok
-
-Point the tunnel at:
-
-```text
-http://localhost:3000
-```
-
-## Notes
-
-- The repository now uses a clean split:
-  - Go API in `api/`
-  - Next.js dashboard in `web/`
-- If you want a production deployment next, the cleanest path is:
-  - run Go API as one service
-  - run Next.js as one service
-  - put Caddy or Nginx in front of the Next app
+Its main contribution is not simply “an Ethereum dashboard,” but a working
+example of how relational, graph, and vector data models can coexist in one
+system, with each chosen because it is the right model for a different class of
+queries.
