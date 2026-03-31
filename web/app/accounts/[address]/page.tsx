@@ -12,6 +12,7 @@ import type {
   AccountBehaviorProfile,
   AccountProfile,
   AccountVelocityPoint,
+  InvestigationCaseSummary,
   SimilarAccountMatch,
 } from "@/lib/types";
 import {
@@ -37,7 +38,7 @@ export default async function AccountPage({
 }) {
   const { address } = await params;
 
-  const [profile, behavior, similarAccounts, velocity] = await Promise.all([
+  const [profile, behavior, similarAccounts, velocity, caseCatalog] = await Promise.all([
     maybeApiFetch<AccountProfile>(`/accounts/${encodeURIComponent(address)}/profile`),
     maybeApiFetch<AccountBehaviorProfile>(
       `/accounts/${encodeURIComponent(address)}/behavior`,
@@ -48,6 +49,7 @@ export default async function AccountPage({
     maybeApiFetch<AccountVelocityPoint[]>(
       `/accounts/${encodeURIComponent(address)}/velocity?hours=72&bucket=hour`,
     ),
+    maybeApiFetch<InvestigationCaseSummary[]>("/cases?limit=24"),
   ]);
 
   if (!profile) {
@@ -211,8 +213,9 @@ export default async function AccountPage({
               <CardContent className="space-y-3">
                 {profile.recent_transactions.length ? (
                   profile.recent_transactions.slice(0, 8).map((tx) => (
-                    <div
+                    <Link
                       key={tx.hash}
+                      href={`/transactions/${encodeURIComponent(tx.hash)}`}
                       className="rounded-[22px] border border-white/8 bg-slate-950/70 p-4"
                     >
                       <div className="font-mono text-xs text-cyan-100">
@@ -224,7 +227,7 @@ export default async function AccountPage({
                       <div className="mt-1 text-sm text-slate-300/78">
                         {formatWeiToEth(tx.value)} · {formatDateTime(tx.timestamp)}
                       </div>
-                    </div>
+                    </Link>
                   ))
                 ) : (
                   <p className="text-sm text-slate-300/72">
@@ -356,6 +359,8 @@ export default async function AccountPage({
             address={profile.address}
             initialNotes={profile.notes}
             initialTags={profile.tags}
+            initialCases={profile.cases}
+            availableCases={caseCatalog || []}
           />
         </div>
       </section>

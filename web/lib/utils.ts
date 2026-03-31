@@ -77,7 +77,7 @@ function formatUnit(
   const value = BigInt(negative ? rawValue.slice(1) : rawValue);
   const whole = value / basePower;
   const fraction = value % basePower;
-  const scaled = (fraction * 10n ** BigInt(precision)) / basePower;
+  const scaled = (fraction * BigInt(10) ** BigInt(precision)) / basePower;
   const fractionText = scaled
     .toString()
     .padStart(precision, "0")
@@ -91,11 +91,11 @@ function formatUnit(
 }
 
 export function formatWeiToEth(rawValue: string | null | undefined, precision = 4) {
-  return formatUnit(rawValue, 10n ** 18n, precision, "ETH");
+  return formatUnit(rawValue, BigInt(10) ** BigInt(18), precision, "ETH");
 }
 
 export function formatWeiToGwei(rawValue: string | null | undefined, precision = 2) {
-  return formatUnit(rawValue, 10n ** 9n, precision, "Gwei");
+  return formatUnit(rawValue, BigInt(10) ** BigInt(9), precision, "Gwei");
 }
 
 export function riskLabel(level: string | null | undefined) {
@@ -130,5 +130,46 @@ export function entityTone(entityType: string | null | undefined) {
       return "bg-indigo-500/15 text-indigo-100 border-indigo-400/30";
     default:
       return "bg-slate-500/15 text-slate-100 border-slate-400/20";
+  }
+}
+
+export function caseStatusTone(status: string | null | undefined) {
+  switch ((status || "").toLowerCase()) {
+    case "monitoring":
+      return "bg-cyan-500/15 text-cyan-100 border-cyan-400/30";
+    case "escalated":
+      return "bg-rose-500/15 text-rose-100 border-rose-400/30";
+    case "closed":
+      return "bg-emerald-500/15 text-emerald-100 border-emerald-400/30";
+    default:
+      return "bg-amber-500/15 text-amber-100 border-amber-400/30";
+  }
+}
+
+export function priorityTone(priority: string | null | undefined) {
+  switch ((priority || "").toLowerCase()) {
+    case "critical":
+      return "bg-rose-500/15 text-rose-100 border-rose-400/30";
+    case "high":
+      return "bg-amber-500/15 text-amber-100 border-amber-400/30";
+    case "low":
+      return "bg-emerald-500/15 text-emerald-100 border-emerald-400/30";
+    default:
+      return "bg-cyan-500/15 text-cyan-100 border-cyan-400/30";
+  }
+}
+
+export function triageTone(status: string | null | undefined) {
+  switch ((status || "").toLowerCase()) {
+    case "escalated":
+      return "bg-rose-500/15 text-rose-100 border-rose-400/30";
+    case "dismissed":
+      return "bg-slate-500/15 text-slate-100 border-slate-400/25";
+    case "resolved":
+      return "bg-emerald-500/15 text-emerald-100 border-emerald-400/30";
+    case "reviewing":
+      return "bg-cyan-500/15 text-cyan-100 border-cyan-400/30";
+    default:
+      return "bg-amber-500/15 text-amber-100 border-amber-400/30";
   }
 }

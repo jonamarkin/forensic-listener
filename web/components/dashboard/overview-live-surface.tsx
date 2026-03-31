@@ -378,8 +378,9 @@ export function OverviewLiveSurface({
           </CardHeader>
           <CardContent className="space-y-3">
             {recentTransactions.map((tx) => (
-              <div
+              <Link
                 key={tx.hash}
+                href={`/transactions/${encodeURIComponent(tx.hash)}`}
                 className="w-full min-w-0 max-w-full rounded-[24px] border border-white/8 bg-black/20 p-4"
               >
                 <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -412,7 +413,7 @@ export function OverviewLiveSurface({
                     </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </CardContent>
         </Card>

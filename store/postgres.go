@@ -80,7 +80,7 @@ func (p *Postgres) UpsertAccount(ctx context.Context, address string, isContract
 		VALUES ($1, $2, NOW(), NOW())
 		ON CONFLICT (address) DO UPDATE
 		    SET last_seen   = NOW(),
-		        is_contract = EXCLUDED.is_contract
+		        is_contract = accounts.is_contract OR EXCLUDED.is_contract
 	`, address, isContract)
 	if err != nil {
 		return fmt.Errorf("upserting account %s: %w", address, err)
@@ -222,11 +222,16 @@ func (p *Postgres) GetAccountProfile(ctx context.Context, address string) (*mode
 	if err != nil {
 		return nil, err
 	}
+	cases, err := p.CasesForAddress(ctx, address, 8)
+	if err != nil {
+		return nil, err
+	}
 
 	profile.Counterparties = counterparties
 	profile.RecentTransactions = recentTransactions
 	profile.Notes = notes
 	profile.Tags = tags
+	profile.Cases = cases
 
 	return profile, nil
 }
@@ -308,7 +313,7 @@ func (p *Postgres) AccountCounterparties(ctx context.Context, address string, li
 	}
 	defer rows.Close()
 
-	var counterparties []*models.CounterpartyActivity
+	counterparties := make([]*models.CounterpartyActivity, 0)
 	for rows.Next() {
 		counterparty := &models.CounterpartyActivity{}
 		if err := rows.Scan(
@@ -383,7 +388,7 @@ func (p *Postgres) AddressNotes(ctx context.Context, address string, limit int) 
 	}
 	defer rows.Close()
 
-	var notes []*models.InvestigatorNote
+	notes := make([]*models.InvestigatorNote, 0)
 	for rows.Next() {
 		note := &models.InvestigatorNote{}
 		if err := rows.Scan(
@@ -453,7 +458,7 @@ func (p *Postgres) AddressTags(ctx context.Context, address string) ([]*models.A
 	}
 	defer rows.Close()
 
-	var tags []*models.AddressTag
+	tags := make([]*models.AddressTag, 0)
 	for rows.Next() {
 		tag := &models.AddressTag{}
 		if err := rows.Scan(&tag.ID, &tag.Address, &tag.Tag, &tag.CreatedAt); err != nil {
@@ -495,6 +500,470 @@ func (p *Postgres) AddAddressTag(ctx context.Context, address, tag string) (*mod
 	}
 
 	return created, nil
+}
+
+// CasesForAddress lists investigation cases linked to an address.
+func (p *Postgres) CasesForAddress(ctx context.Context, address string, limit int) ([]*models.InvestigationCaseSummary, error) {
+	address = NormalizeAddress(address)
+	if limit <= 0 {
+		limit = 8
+	}
+
+	rows, err := p.pool.Query(ctx, `
+		WITH address_counts AS (
+			SELECT case_id, COUNT(*)::bigint AS address_count
+			FROM case_addresses
+			GROUP BY case_id
+		),
+		flag_counts AS (
+			SELECT case_id,
+			       COUNT(*)::bigint AS flag_count,
+			       COUNT(*) FILTER (WHERE status IN ('new', 'reviewing', 'escalated'))::bigint AS open_flag_count
+			FROM flag_triage
+			WHERE case_id IS NOT NULL
+			GROUP BY case_id
+		)
+		SELECT
+			c.id,
+			c.title,
+			c.summary,
+			c.status,
+			c.priority,
+			c.owner,
+			COALESCE(ac.address_count, 0),
+			COALESCE(fc.flag_count, 0),
+			COALESCE(fc.open_flag_count, 0),
+			c.created_at,
+			c.updated_at
+		FROM investigation_cases c
+		JOIN case_addresses ca
+		  ON ca.case_id = c.id
+		 AND ca.address = $1
+		LEFT JOIN address_counts ac ON ac.case_id = c.id
+		LEFT JOIN flag_counts fc ON fc.case_id = c.id
+		ORDER BY c.updated_at DESC, c.id DESC
+		LIMIT $2
+	`, address, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying cases for %s: %w", address, err)
+	}
+	defer rows.Close()
+
+	return scanCaseSummaries(rows, fmt.Sprintf("scanning case summary for %s", address))
+}
+
+// ListCases returns the most recent investigation cases, optionally filtered by status.
+func (p *Postgres) ListCases(ctx context.Context, limit int, status string) ([]*models.InvestigationCaseSummary, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	status = strings.TrimSpace(status)
+	if status != "" {
+		status = normalizeCaseStatus(status)
+	}
+
+	rows, err := p.pool.Query(ctx, `
+		WITH address_counts AS (
+			SELECT case_id, COUNT(*)::bigint AS address_count
+			FROM case_addresses
+			GROUP BY case_id
+		),
+		flag_counts AS (
+			SELECT case_id,
+			       COUNT(*)::bigint AS flag_count,
+			       COUNT(*) FILTER (WHERE status IN ('new', 'reviewing', 'escalated'))::bigint AS open_flag_count
+			FROM flag_triage
+			WHERE case_id IS NOT NULL
+			GROUP BY case_id
+		)
+		SELECT
+			c.id,
+			c.title,
+			c.summary,
+			c.status,
+			c.priority,
+			c.owner,
+			COALESCE(ac.address_count, 0),
+			COALESCE(fc.flag_count, 0),
+			COALESCE(fc.open_flag_count, 0),
+			c.created_at,
+			c.updated_at
+		FROM investigation_cases c
+		LEFT JOIN address_counts ac ON ac.case_id = c.id
+		LEFT JOIN flag_counts fc ON fc.case_id = c.id
+		WHERE ($2 = '' OR c.status = $2)
+		ORDER BY
+			CASE c.priority
+				WHEN 'critical' THEN 4
+				WHEN 'high' THEN 3
+				WHEN 'medium' THEN 2
+				ELSE 1
+			END DESC,
+			c.updated_at DESC,
+			c.id DESC
+		LIMIT $1
+	`, limit, status)
+	if err != nil {
+		return nil, fmt.Errorf("querying investigation cases: %w", err)
+	}
+	defer rows.Close()
+
+	return scanCaseSummaries(rows, "scanning investigation case summary")
+}
+
+// CreateCase creates a new investigation case.
+func (p *Postgres) CreateCase(ctx context.Context, title, summary, owner, priority string) (*models.InvestigationCaseSummary, error) {
+	title = strings.TrimSpace(title)
+	summary = strings.TrimSpace(summary)
+	owner = strings.TrimSpace(owner)
+	priority = normalizeCasePriority(priority)
+	if title == "" {
+		return nil, fmt.Errorf("case title must not be empty")
+	}
+	if owner == "" {
+		owner = "investigator"
+	}
+
+	created := &models.InvestigationCaseSummary{}
+	err := p.pool.QueryRow(ctx, `
+		INSERT INTO investigation_cases (
+			title,
+			summary,
+			status,
+			priority,
+			owner,
+			created_at,
+			updated_at
+		)
+		VALUES ($1, $2, 'open', $3, $4, NOW(), NOW())
+		RETURNING
+			id,
+			title,
+			summary,
+			status,
+			priority,
+			owner,
+			0::bigint AS address_count,
+			0::bigint AS flag_count,
+			0::bigint AS open_flag_count,
+			created_at,
+			updated_at
+	`, title, summary, priority, owner).Scan(
+		&created.ID,
+		&created.Title,
+		&created.Summary,
+		&created.Status,
+		&created.Priority,
+		&created.Owner,
+		&created.AddressCount,
+		&created.FlagCount,
+		&created.OpenFlagCount,
+		&created.CreatedAt,
+		&created.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating investigation case: %w", err)
+	}
+
+	return created, nil
+}
+
+// UpdateCase refreshes the top-level metadata for an investigation case.
+func (p *Postgres) UpdateCase(
+	ctx context.Context,
+	caseID int64,
+	title, summary, owner, status, priority string,
+) (*models.InvestigationCaseSummary, error) {
+	title = strings.TrimSpace(title)
+	summary = strings.TrimSpace(summary)
+	owner = strings.TrimSpace(owner)
+	status = normalizeCaseStatus(status)
+	priority = normalizeCasePriority(priority)
+	if title == "" {
+		return nil, fmt.Errorf("case title must not be empty")
+	}
+	if owner == "" {
+		owner = "investigator"
+	}
+
+	updated := &models.InvestigationCaseSummary{}
+	err := p.pool.QueryRow(ctx, `
+		WITH updated_case AS (
+			UPDATE investigation_cases
+			SET title = $2,
+			    summary = $3,
+			    status = $4,
+			    priority = $5,
+			    owner = $6,
+			    updated_at = NOW()
+			WHERE id = $1
+			RETURNING id, title, summary, status, priority, owner, created_at, updated_at
+		),
+		address_counts AS (
+			SELECT case_id, COUNT(*)::bigint AS address_count
+			FROM case_addresses
+			GROUP BY case_id
+		),
+		flag_counts AS (
+			SELECT case_id,
+			       COUNT(*)::bigint AS flag_count,
+			       COUNT(*) FILTER (WHERE status IN ('new', 'reviewing', 'escalated'))::bigint AS open_flag_count
+			FROM flag_triage
+			WHERE case_id IS NOT NULL
+			GROUP BY case_id
+		)
+		SELECT
+			u.id,
+			u.title,
+			u.summary,
+			u.status,
+			u.priority,
+			u.owner,
+			COALESCE(ac.address_count, 0),
+			COALESCE(fc.flag_count, 0),
+			COALESCE(fc.open_flag_count, 0),
+			u.created_at,
+			u.updated_at
+		FROM updated_case u
+		LEFT JOIN address_counts ac ON ac.case_id = u.id
+		LEFT JOIN flag_counts fc ON fc.case_id = u.id
+	`, caseID, title, summary, status, priority, owner).Scan(
+		&updated.ID,
+		&updated.Title,
+		&updated.Summary,
+		&updated.Status,
+		&updated.Priority,
+		&updated.Owner,
+		&updated.AddressCount,
+		&updated.FlagCount,
+		&updated.OpenFlagCount,
+		&updated.CreatedAt,
+		&updated.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &NotFoundError{Resource: "investigation_case", ID: fmt.Sprint(caseID)}
+		}
+		return nil, fmt.Errorf("updating investigation case %d: %w", caseID, err)
+	}
+
+	return updated, nil
+}
+
+// InvestigationCase returns a full case view with linked addresses and triaged flags.
+func (p *Postgres) InvestigationCase(ctx context.Context, caseID int64) (*models.InvestigationCaseDetail, error) {
+	detail := &models.InvestigationCaseDetail{}
+	err := p.pool.QueryRow(ctx, `
+		WITH address_counts AS (
+			SELECT case_id, COUNT(*)::bigint AS address_count
+			FROM case_addresses
+			GROUP BY case_id
+		),
+		flag_counts AS (
+			SELECT case_id,
+			       COUNT(*)::bigint AS flag_count,
+			       COUNT(*) FILTER (WHERE status IN ('new', 'reviewing', 'escalated'))::bigint AS open_flag_count
+			FROM flag_triage
+			WHERE case_id IS NOT NULL
+			GROUP BY case_id
+		)
+		SELECT
+			c.id,
+			c.title,
+			c.summary,
+			c.status,
+			c.priority,
+			c.owner,
+			COALESCE(ac.address_count, 0),
+			COALESCE(fc.flag_count, 0),
+			COALESCE(fc.open_flag_count, 0),
+			c.created_at,
+			c.updated_at
+		FROM investigation_cases c
+		LEFT JOIN address_counts ac ON ac.case_id = c.id
+		LEFT JOIN flag_counts fc ON fc.case_id = c.id
+		WHERE c.id = $1
+	`, caseID).Scan(
+		&detail.ID,
+		&detail.Title,
+		&detail.Summary,
+		&detail.Status,
+		&detail.Priority,
+		&detail.Owner,
+		&detail.AddressCount,
+		&detail.FlagCount,
+		&detail.OpenFlagCount,
+		&detail.CreatedAt,
+		&detail.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &NotFoundError{Resource: "investigation_case", ID: fmt.Sprint(caseID)}
+		}
+		return nil, fmt.Errorf("querying investigation case %d: %w", caseID, err)
+	}
+
+	addressRows, err := p.pool.Query(ctx, `
+		SELECT
+			ca.id,
+			ca.case_id,
+			ca.address,
+			ca.role,
+			ca.note,
+			ca.added_at,
+			COALESCE(ke.name, ''),
+			COALESCE(ke.entity_type, ''),
+			COALESCE(NULLIF(ke.risk_level, ''), 'none'),
+			COALESCE(a.is_contract, FALSE)
+		FROM case_addresses ca
+		LEFT JOIN known_entities ke ON ke.address = ca.address
+		LEFT JOIN accounts a ON a.address = ca.address
+		WHERE ca.case_id = $1
+		ORDER BY ca.added_at DESC, ca.id DESC
+	`, caseID)
+	if err != nil {
+		return nil, fmt.Errorf("querying case addresses for %d: %w", caseID, err)
+	}
+	defer addressRows.Close()
+
+	for addressRows.Next() {
+		entry := &models.CaseAddress{}
+		if err := addressRows.Scan(
+			&entry.ID,
+			&entry.CaseID,
+			&entry.Address,
+			&entry.Role,
+			&entry.Note,
+			&entry.AddedAt,
+			&entry.EntityName,
+			&entry.EntityType,
+			&entry.RiskLevel,
+			&entry.IsContract,
+		); err != nil {
+			return nil, fmt.Errorf("scanning case address for %d: %w", caseID, err)
+		}
+		if entry.EntityType == "" {
+			if entry.IsContract {
+				entry.EntityType = "contract"
+			} else {
+				entry.EntityType = "wallet"
+			}
+		}
+		detail.Addresses = append(detail.Addresses, entry)
+	}
+	if err := addressRows.Err(); err != nil {
+		return nil, err
+	}
+
+	flagRows, err := p.pool.Query(ctx, `
+		SELECT
+			f.id,
+			COALESCE(f.tx_hash, ''),
+			f.address,
+			f.flag_type,
+			f.severity,
+			COALESCE(f.description, ''),
+			f.detected_at,
+			COALESCE(ft.status, 'new'),
+			COALESCE(ft.assignee, ''),
+			COALESCE(ft.analyst_note, ''),
+			ft.case_id,
+			COALESCE(ic.title, ''),
+			ft.reviewed_at
+		FROM forensic_flags f
+		JOIN flag_triage ft ON ft.flag_id = f.id
+		LEFT JOIN investigation_cases ic ON ic.id = ft.case_id
+		WHERE ft.case_id = $1
+		ORDER BY f.detected_at DESC, f.id DESC
+	`, caseID)
+	if err != nil {
+		return nil, fmt.Errorf("querying case flags for %d: %w", caseID, err)
+	}
+	defer flagRows.Close()
+
+	flags, err := scanForensicFlags(flagRows)
+	if err != nil {
+		return nil, err
+	}
+	detail.Flags = flags
+
+	return detail, nil
+}
+
+// AddAddressToCase links an address into an investigation case.
+func (p *Postgres) AddAddressToCase(ctx context.Context, caseID int64, address, role, note string) (*models.CaseAddress, error) {
+	address = NormalizeAddress(address)
+	role = normalizeCaseAddressRole(role)
+	note = strings.TrimSpace(note)
+	if address == "" {
+		return nil, fmt.Errorf("address must not be empty")
+	}
+
+	if err := p.UpsertAccount(ctx, address, false); err != nil {
+		return nil, err
+	}
+
+	entry := &models.CaseAddress{}
+	err := p.pool.QueryRow(ctx, `
+		WITH upserted AS (
+			INSERT INTO case_addresses (case_id, address, role, note, added_at)
+			VALUES ($1, $2, $3, $4, NOW())
+			ON CONFLICT (case_id, address) DO UPDATE
+			SET role = EXCLUDED.role,
+			    note = CASE
+			        WHEN EXCLUDED.note <> '' THEN EXCLUDED.note
+			        ELSE case_addresses.note
+			    END
+			RETURNING id, case_id, address, role, note, added_at
+		)
+		SELECT
+			u.id,
+			u.case_id,
+			u.address,
+			u.role,
+			u.note,
+			u.added_at,
+			COALESCE(ke.name, ''),
+			COALESCE(ke.entity_type, ''),
+			COALESCE(NULLIF(ke.risk_level, ''), 'none'),
+			COALESCE(a.is_contract, FALSE)
+		FROM upserted u
+		LEFT JOIN known_entities ke ON ke.address = u.address
+		LEFT JOIN accounts a ON a.address = u.address
+	`, caseID, address, role, note).Scan(
+		&entry.ID,
+		&entry.CaseID,
+		&entry.Address,
+		&entry.Role,
+		&entry.Note,
+		&entry.AddedAt,
+		&entry.EntityName,
+		&entry.EntityType,
+		&entry.RiskLevel,
+		&entry.IsContract,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "violates foreign key constraint") {
+			return nil, &NotFoundError{Resource: "investigation_case", ID: fmt.Sprint(caseID)}
+		}
+		return nil, fmt.Errorf("adding address %s to case %d: %w", address, caseID, err)
+	}
+
+	if entry.EntityType == "" {
+		if entry.IsContract {
+			entry.EntityType = "contract"
+		} else {
+			entry.EntityType = "wallet"
+		}
+	}
+
+	_, _ = p.pool.Exec(ctx, `
+		UPDATE investigation_cases
+		SET updated_at = NOW()
+		WHERE id = $1
+	`, caseID)
+
+	return entry, nil
 }
 
 // ContractDetail returns the current contract dossier for an address.
@@ -627,7 +1096,7 @@ func (p *Postgres) NetworkMetrics(ctx context.Context, bucket string, hours int)
 	}
 	defer rows.Close()
 
-	var points []*models.NetworkMetricPoint
+	points := make([]*models.NetworkMetricPoint, 0)
 	for rows.Next() {
 		point := &models.NetworkMetricPoint{}
 		if err := rows.Scan(
@@ -682,7 +1151,7 @@ func (p *Postgres) AddressVelocity(ctx context.Context, address, bucket string, 
 	}
 	defer rows.Close()
 
-	var points []*models.AccountVelocityPoint
+	points := make([]*models.AccountVelocityPoint, 0)
 	for rows.Next() {
 		point := &models.AccountVelocityPoint{}
 		if err := rows.Scan(
@@ -788,7 +1257,7 @@ func (p *Postgres) VelocityAlerts(ctx context.Context, windowMinutes, limit int)
 	}
 	defer rows.Close()
 
-	var alerts []*models.VelocityAlert
+	alerts := make([]*models.VelocityAlert, 0)
 	for rows.Next() {
 		alert := &models.VelocityAlert{}
 		if err := rows.Scan(
@@ -1134,13 +1603,13 @@ func (p *Postgres) TransactionByHash(ctx context.Context, hash string) (*models.
 
 	err := p.pool.QueryRow(ctx, `
 		SELECT hash, from_address, to_address, value, gas,
-		       gas_price, nonce, block_number, timestamp
+		       gas_price, nonce, block_number, data, timestamp
 		FROM   transactions
 		WHERE  hash = $1
 	`, hash).Scan(
 		&tx.Hash, &tx.From, &toAddr, &tx.Value,
 		&tx.Gas, &tx.GasPrice, &tx.Nonce,
-		&tx.BlockNumber, &tx.Timestamp,
+		&tx.BlockNumber, &tx.Data, &tx.Timestamp,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1179,8 +1648,23 @@ func (p *Postgres) SaveFlag(ctx context.Context, flag *models.ForensicFlag) erro
 // RecentFlags returns the latest N forensic flags.
 func (p *Postgres) RecentFlags(ctx context.Context, limit int) ([]*models.ForensicFlag, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, tx_hash, address, flag_type, severity, description, detected_at
-		FROM   forensic_flags
+		SELECT
+			f.id,
+			COALESCE(f.tx_hash, ''),
+			f.address,
+			f.flag_type,
+			f.severity,
+			COALESCE(f.description, ''),
+			f.detected_at,
+			COALESCE(ft.status, 'new'),
+			COALESCE(ft.assignee, ''),
+			COALESCE(ft.analyst_note, ''),
+			ft.case_id,
+			COALESCE(ic.title, ''),
+			ft.reviewed_at
+		FROM forensic_flags f
+		LEFT JOIN flag_triage ft ON ft.flag_id = f.id
+		LEFT JOIN investigation_cases ic ON ic.id = ft.case_id
 		ORDER  BY detected_at DESC
 		LIMIT  $1
 	`, limit)
@@ -1189,18 +1673,134 @@ func (p *Postgres) RecentFlags(ctx context.Context, limit int) ([]*models.Forens
 	}
 	defer rows.Close()
 
-	var flags []*models.ForensicFlag
-	for rows.Next() {
-		f := &models.ForensicFlag{}
-		if err := rows.Scan(
-			&f.ID, &f.TxHash, &f.Address,
-			&f.FlagType, &f.Severity, &f.Description, &f.DetectedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scanning flag: %w", err)
-		}
-		flags = append(flags, f)
+	return scanForensicFlags(rows)
+}
+
+// FlagsForTransaction lists all forensic flags attached to a transaction hash.
+func (p *Postgres) FlagsForTransaction(ctx context.Context, hash string) ([]*models.ForensicFlag, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT
+			f.id,
+			COALESCE(f.tx_hash, ''),
+			f.address,
+			f.flag_type,
+			f.severity,
+			COALESCE(f.description, ''),
+			f.detected_at,
+			COALESCE(ft.status, 'new'),
+			COALESCE(ft.assignee, ''),
+			COALESCE(ft.analyst_note, ''),
+			ft.case_id,
+			COALESCE(ic.title, ''),
+			ft.reviewed_at
+		FROM forensic_flags f
+		LEFT JOIN flag_triage ft ON ft.flag_id = f.id
+		LEFT JOIN investigation_cases ic ON ic.id = ft.case_id
+		WHERE f.tx_hash = $1
+		ORDER BY f.detected_at DESC, f.id DESC
+	`, hash)
+	if err != nil {
+		return nil, fmt.Errorf("querying flags for transaction %s: %w", hash, err)
 	}
-	return flags, rows.Err()
+	defer rows.Close()
+
+	return scanForensicFlags(rows)
+}
+
+// UpsertFlagTriage records analyst review state for a forensic flag.
+func (p *Postgres) UpsertFlagTriage(
+	ctx context.Context,
+	flagID int,
+	status, assignee, analystNote string,
+	caseID *int64,
+) (*models.ForensicFlag, error) {
+	status = normalizeTriageStatus(status)
+	assignee = strings.TrimSpace(assignee)
+	analystNote = strings.TrimSpace(analystNote)
+
+	row := p.pool.QueryRow(ctx, `
+		WITH triaged AS (
+			INSERT INTO flag_triage (
+				flag_id,
+				status,
+				assignee,
+				analyst_note,
+				case_id,
+				reviewed_at,
+				updated_at
+			)
+			VALUES (
+				$1,
+				$2,
+				$3,
+				$4,
+				$5,
+				CASE WHEN $2 = 'new' THEN NULL ELSE NOW() END,
+				NOW()
+			)
+			ON CONFLICT (flag_id) DO UPDATE
+			SET status = EXCLUDED.status,
+			    assignee = EXCLUDED.assignee,
+			    analyst_note = EXCLUDED.analyst_note,
+			    case_id = EXCLUDED.case_id,
+			    reviewed_at = CASE
+			        WHEN EXCLUDED.status = 'new' THEN NULL
+			        ELSE NOW()
+			    END,
+			    updated_at = NOW()
+			RETURNING flag_id
+		)
+		SELECT
+			f.id,
+			COALESCE(f.tx_hash, ''),
+			f.address,
+			f.flag_type,
+			f.severity,
+			COALESCE(f.description, ''),
+			f.detected_at,
+			COALESCE(ft.status, 'new'),
+			COALESCE(ft.assignee, ''),
+			COALESCE(ft.analyst_note, ''),
+			ft.case_id,
+			COALESCE(ic.title, ''),
+			ft.reviewed_at
+		FROM forensic_flags f
+		LEFT JOIN flag_triage ft ON ft.flag_id = f.id
+		LEFT JOIN investigation_cases ic ON ic.id = ft.case_id
+		WHERE f.id = $1
+	`, flagID, status, assignee, analystNote, caseID)
+
+	updated := &models.ForensicFlag{}
+	if err := row.Scan(
+		&updated.ID,
+		&updated.TxHash,
+		&updated.Address,
+		&updated.FlagType,
+		&updated.Severity,
+		&updated.Description,
+		&updated.DetectedAt,
+		&updated.TriageStatus,
+		&updated.Assignee,
+		&updated.AnalystNote,
+		&updated.CaseID,
+		&updated.CaseTitle,
+		&updated.ReviewedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &NotFoundError{Resource: "forensic_flag", ID: fmt.Sprint(flagID)}
+		}
+		return nil, fmt.Errorf("upserting flag triage for %d: %w", flagID, err)
+	}
+
+	if updated.CaseID != nil {
+		_, _ = p.pool.Exec(ctx, `
+			UPDATE investigation_cases
+			SET updated_at = NOW()
+			WHERE id = $1
+		`, *updated.CaseID)
+	}
+
+	return updated, nil
 }
 
 // OverviewStats returns dashboard summary counters across the primary stores.
@@ -1302,7 +1902,7 @@ func (p *Postgres) TopAddresses(ctx context.Context, limit int) ([]*models.Addre
 	}
 	defer rows.Close()
 
-	var addresses []*models.AddressActivity
+	addresses := make([]*models.AddressActivity, 0)
 	for rows.Next() {
 		address := &models.AddressActivity{}
 		if err := rows.Scan(
@@ -1344,7 +1944,7 @@ func (p *Postgres) RecentContracts(ctx context.Context, limit int) ([]*models.Co
 	}
 	defer rows.Close()
 
-	var contracts []*models.ContractSummary
+	contracts := make([]*models.ContractSummary, 0)
 	for rows.Next() {
 		contract := &models.ContractSummary{}
 		if err := rows.Scan(
@@ -1380,7 +1980,7 @@ func (p *Postgres) FlagSeries(ctx context.Context, bucket string, hours int) ([]
 	}
 	defer rows.Close()
 
-	var buckets []*models.FlagBucket
+	buckets := make([]*models.FlagBucket, 0)
 	for rows.Next() {
 		bucket := &models.FlagBucket{}
 		if err := rows.Scan(
@@ -1413,7 +2013,7 @@ func nullableString(s string) *string {
 // the scanning logic between RecentTransactions and any future
 // query that returns a list of transactions.
 func scanTransactions(rows pgx.Rows) ([]*models.Transaction, error) {
-	var txs []*models.Transaction
+	txs := make([]*models.Transaction, 0)
 	for rows.Next() {
 		tx := &models.Transaction{}
 		var toAddr *string
@@ -1453,6 +2053,124 @@ func normalizeAddressList(addresses []string) []string {
 	}
 
 	return normalized
+}
+
+func scanCaseSummaries(rows pgx.Rows, contextMessage string) ([]*models.InvestigationCaseSummary, error) {
+	cases := make([]*models.InvestigationCaseSummary, 0)
+	for rows.Next() {
+		entry := &models.InvestigationCaseSummary{}
+		if err := rows.Scan(
+			&entry.ID,
+			&entry.Title,
+			&entry.Summary,
+			&entry.Status,
+			&entry.Priority,
+			&entry.Owner,
+			&entry.AddressCount,
+			&entry.FlagCount,
+			&entry.OpenFlagCount,
+			&entry.CreatedAt,
+			&entry.UpdatedAt,
+		); err != nil {
+			if contextMessage == "" {
+				contextMessage = "scanning investigation case summary"
+			}
+			return nil, fmt.Errorf("%s: %w", contextMessage, err)
+		}
+		cases = append(cases, entry)
+	}
+
+	return cases, rows.Err()
+}
+
+func scanForensicFlags(rows pgx.Rows) ([]*models.ForensicFlag, error) {
+	flags := make([]*models.ForensicFlag, 0)
+	for rows.Next() {
+		flag := &models.ForensicFlag{}
+		var caseID *int64
+		var reviewedAt *time.Time
+		if err := rows.Scan(
+			&flag.ID,
+			&flag.TxHash,
+			&flag.Address,
+			&flag.FlagType,
+			&flag.Severity,
+			&flag.Description,
+			&flag.DetectedAt,
+			&flag.TriageStatus,
+			&flag.Assignee,
+			&flag.AnalystNote,
+			&caseID,
+			&flag.CaseTitle,
+			&reviewedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning forensic flag: %w", err)
+		}
+		if flag.TriageStatus == "" {
+			flag.TriageStatus = "new"
+		}
+		flag.CaseID = caseID
+		flag.ReviewedAt = reviewedAt
+		flags = append(flags, flag)
+	}
+
+	return flags, rows.Err()
+}
+
+func normalizeCaseStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "monitoring":
+		return "monitoring"
+	case "escalated":
+		return "escalated"
+	case "closed":
+		return "closed"
+	default:
+		return "open"
+	}
+}
+
+func normalizeCasePriority(priority string) string {
+	switch strings.ToLower(strings.TrimSpace(priority)) {
+	case "low":
+		return "low"
+	case "high":
+		return "high"
+	case "critical":
+		return "critical"
+	default:
+		return "medium"
+	}
+}
+
+func normalizeCaseAddressRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "counterparty":
+		return "counterparty"
+	case "watch":
+		return "watch"
+	case "entity":
+		return "entity"
+	case "contract":
+		return "contract"
+	default:
+		return "subject"
+	}
+}
+
+func normalizeTriageStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "new":
+		return "new"
+	case "escalated":
+		return "escalated"
+	case "dismissed":
+		return "dismissed"
+	case "resolved":
+		return "resolved"
+	default:
+		return "reviewing"
+	}
 }
 
 // RunMigrations applies all pending migrations on startup.

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -53,6 +54,13 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	router.Get("/health", s.handleHealth)
 	router.Get("/transactions", s.handleRecentTransactions)
 	router.Get("/transactions/{hash}", s.handleTransactionByHash)
+	router.Get("/transactions/{hash}/flags", s.handleTransactionFlags)
+	router.Get("/cases", s.handleListCases)
+	router.Post("/cases", s.handleCreateCase)
+	router.Get("/cases/{id}/report", s.handleCaseReport)
+	router.Get("/cases/{id}", s.handleCaseDetail)
+	router.Post("/cases/{id}", s.handleUpdateCase)
+	router.Post("/cases/{id}/addresses", s.handleCreateCaseAddress)
 	router.Get("/accounts/{address}/profile", s.handleAccountProfile)
 	router.Post("/accounts/{address}/notes", s.handleCreateAccountNote)
 	router.Post("/accounts/{address}/tags", s.handleCreateAccountTag)
@@ -68,6 +76,7 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	router.Get("/contracts/{address}/similar", s.handleSimilarContracts)
 	router.Get("/contracts/{address}", s.handleContractDetail)
 	router.Get("/flags", s.handleRecentFlags)
+	router.Post("/flags/{id}/triage", s.handleFlagTriage)
 	router.Get("/forensics/circular", s.handleCircularFlows)
 	router.Get("/stats/overview", s.handleOverviewStats)
 	router.Get("/stats/enrichment", s.handleEnrichmentStats)
@@ -131,6 +140,195 @@ func (s *Server) handleTransactionByHash(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, tx)
+}
+
+func (s *Server) handleTransactionFlags(w http.ResponseWriter, r *http.Request) {
+	flags, err := s.pg.FlagsForTransaction(r.Context(), chi.URLParam(r, "hash"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	enrichFlags(flags)
+	writeJSON(w, http.StatusOK, flags)
+}
+
+func (s *Server) handleListCases(w http.ResponseWriter, r *http.Request) {
+	cases, err := s.pg.ListCases(
+		r.Context(),
+		parseLimit(r, 20, 100),
+		r.URL.Query().Get("status"),
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, cases)
+}
+
+func (s *Server) handleCreateCase(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Title    string `json:"title"`
+		Summary  string `json:"summary"`
+		Owner    string `json:"owner"`
+		Priority string `json:"priority"`
+		Address  string `json:"address"`
+		Role     string `json:"role"`
+		Note     string `json:"note"`
+	}
+	if err := readJSONBody(r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if strings.TrimSpace(payload.Title) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "case title must not be empty"})
+		return
+	}
+
+	created, err := s.pg.CreateCase(
+		r.Context(),
+		payload.Title,
+		payload.Summary,
+		payload.Owner,
+		payload.Priority,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if strings.TrimSpace(payload.Address) != "" {
+		if _, err := s.pg.AddAddressToCase(
+			r.Context(),
+			created.ID,
+			payload.Address,
+			payload.Role,
+			payload.Note,
+		); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("case created but address attach failed: %w", err))
+			return
+		}
+	}
+
+	detail, err := s.pg.InvestigationCase(r.Context(), created.ID)
+	if err == nil {
+		writeJSON(w, http.StatusCreated, detail.InvestigationCaseSummary)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleCaseDetail(w http.ResponseWriter, r *http.Request) {
+	caseID, err := parseInt64Param(chi.URLParam(r, "id"), "case id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	detail, err := s.pg.InvestigationCase(r.Context(), caseID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	enrichFlags(detail.Flags)
+	writeJSON(w, http.StatusOK, detail)
+}
+
+func (s *Server) handleCaseReport(w http.ResponseWriter, r *http.Request) {
+	caseID, err := parseInt64Param(chi.URLParam(r, "id"), "case id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	detail, err := s.pg.InvestigationCase(r.Context(), caseID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	enrichFlags(detail.Flags)
+
+	report := renderCaseReport(detail)
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"case-%d-report.md\"", caseID))
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(report)); err != nil {
+		log.Printf("[api] writing case report: %v", err)
+	}
+}
+
+func (s *Server) handleUpdateCase(w http.ResponseWriter, r *http.Request) {
+	caseID, err := parseInt64Param(chi.URLParam(r, "id"), "case id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var payload struct {
+		Title    string `json:"title"`
+		Summary  string `json:"summary"`
+		Owner    string `json:"owner"`
+		Status   string `json:"status"`
+		Priority string `json:"priority"`
+	}
+	if err := readJSONBody(r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if strings.TrimSpace(payload.Title) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "case title must not be empty"})
+		return
+	}
+
+	updated, err := s.pg.UpdateCase(
+		r.Context(),
+		caseID,
+		payload.Title,
+		payload.Summary,
+		payload.Owner,
+		payload.Status,
+		payload.Priority,
+	)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) handleCreateCaseAddress(w http.ResponseWriter, r *http.Request) {
+	caseID, err := parseInt64Param(chi.URLParam(r, "id"), "case id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var payload struct {
+		Address string `json:"address"`
+		Role    string `json:"role"`
+		Note    string `json:"note"`
+	}
+	if err := readJSONBody(r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if strings.TrimSpace(payload.Address) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "address must not be empty"})
+		return
+	}
+
+	entry, err := s.pg.AddAddressToCase(
+		r.Context(),
+		caseID,
+		payload.Address,
+		payload.Role,
+		payload.Note,
+	)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, entry)
 }
 
 func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
@@ -359,7 +557,46 @@ func (s *Server) handleRecentFlags(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	enrichFlags(flags)
 	writeJSON(w, http.StatusOK, flags)
+}
+
+func (s *Server) handleFlagTriage(w http.ResponseWriter, r *http.Request) {
+	flagID, err := parseIntParam(chi.URLParam(r, "id"), "flag id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var payload struct {
+		Status      string `json:"status"`
+		Assignee    string `json:"assignee"`
+		AnalystNote string `json:"analyst_note"`
+		CaseID      *int64 `json:"case_id"`
+	}
+	if err := readJSONBody(r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if payload.CaseID != nil && *payload.CaseID <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "case_id must be positive when provided"})
+		return
+	}
+
+	updated, err := s.pg.UpsertFlagTriage(
+		r.Context(),
+		flagID,
+		payload.Status,
+		payload.Assignee,
+		payload.AnalystNote,
+		payload.CaseID,
+	)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	enrichFlag(updated)
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) handleCircularFlows(w http.ResponseWriter, r *http.Request) {
@@ -494,6 +731,7 @@ func (s *Server) buildSnapshot(ctx context.Context) (*models.StreamSnapshot, err
 	if err != nil {
 		return nil, err
 	}
+	enrichFlags(recentFlags)
 
 	return &models.StreamSnapshot{
 		Timestamp:          time.Now().UTC(),
@@ -591,6 +829,22 @@ func parseWindowMinutes(r *http.Request) int {
 		return 24 * 60
 	}
 	return window
+}
+
+func parseInt64Param(raw, label string) (int64, error) {
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid %s", label)
+	}
+	return value, nil
+}
+
+func parseIntParam(raw, label string) (int, error) {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid %s", label)
+	}
+	return value, nil
 }
 
 func writeStoreError(w http.ResponseWriter, err error) {

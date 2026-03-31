@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
+  BriefcaseBusiness,
   Compass,
   FileCode2,
   Menu,
@@ -38,6 +39,12 @@ const navItems = [
     label: "Alerts",
     description: "Velocity spikes, circular loops, and live issues.",
     icon: ShieldAlert,
+  },
+  {
+    href: "/cases",
+    label: "Cases",
+    description: "Saved investigations, ownership, and linked evidence.",
+    icon: BriefcaseBusiness,
   },
   {
     href: "/contracts",
@@ -242,8 +249,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </h2>
               <p className="max-w-3xl text-sm leading-6 text-slate-300/78">
                 Overview monitors the system, Flow Canvas traces assets,
-                Accounts hold dossiers, Contracts hold code intelligence, and
-                Alerts keep the spikes visible.
+                Accounts hold dossiers, Cases preserve investigations,
+                Contracts hold code intelligence, and Alerts keep the spikes
+                visible.
               </p>
               <div className="hidden pt-2 md:block">
                 <LiveIndicator />

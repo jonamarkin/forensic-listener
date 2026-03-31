@@ -19,31 +19,56 @@ async function proxy(request: NextRequest, context: RouteContext) {
     upstreamUrl.searchParams.append(key, value);
   });
 
-  const headers = buildBackendHeaders(request.headers);
-  headers.delete("host");
-  headers.delete("content-length");
+  const headers = buildBackendHeaders();
+  const accept = request.headers.get("accept");
+  const requestContentType = request.headers.get("content-type");
+  const authorization = request.headers.get("authorization");
+
+  if (accept) {
+    headers.set("accept", accept);
+  }
+  if (requestContentType) {
+    headers.set("content-type", requestContentType);
+  }
+  if (authorization && !headers.has("authorization")) {
+    headers.set("authorization", authorization);
+  }
 
   const body =
     request.method === "GET" || request.method === "HEAD"
       ? undefined
       : await request.text();
 
-  const upstream = await fetch(upstreamUrl, {
-    method: request.method,
-    headers,
-    body,
-    cache: "no-store",
-    redirect: "manual",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(upstreamUrl, {
+      method: request.method,
+      headers,
+      body,
+      cache: "no-store",
+      redirect: "manual",
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown upstream proxy error";
+    return NextResponse.json(
+      { error: `forensic proxy failed: ${message}` },
+      { status: 502 },
+    );
+  }
 
   const responseHeaders = new Headers();
-  const contentType = upstream.headers.get("content-type");
-  if (contentType) {
-    responseHeaders.set("content-type", contentType);
+  const upstreamContentType = upstream.headers.get("content-type");
+  if (upstreamContentType) {
+    responseHeaders.set("content-type", upstreamContentType);
   }
   const cacheControl = upstream.headers.get("cache-control");
   if (cacheControl) {
     responseHeaders.set("cache-control", cacheControl);
+  }
+  const contentDisposition = upstream.headers.get("content-disposition");
+  if (contentDisposition) {
+    responseHeaders.set("content-disposition", contentDisposition);
   }
 
   return new NextResponse(upstream.body, {

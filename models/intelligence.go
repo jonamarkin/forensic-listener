@@ -35,26 +35,27 @@ type AddressTag struct {
 }
 
 type AccountProfile struct {
-	Address               string                  `json:"address"`
-	Balance               string                  `json:"balance"`
-	IsContract            bool                    `json:"is_contract"`
-	FirstSeen             time.Time               `json:"first_seen"`
-	LastSeen              time.Time               `json:"last_seen"`
-	SentCount             int64                   `json:"sent_count"`
-	ReceivedCount         int64                   `json:"received_count"`
-	TotalCount            int64                   `json:"total_count"`
-	TotalSent             string                  `json:"total_sent"`
-	TotalReceived         string                  `json:"total_received"`
-	FlagCount             int64                   `json:"flag_count"`
-	HighSeverityFlagCount int64                   `json:"high_severity_flag_count"`
-	RiskLevel             string                  `json:"risk_level"`
-	EntityName            string                  `json:"entity_name"`
-	EntityType            string                  `json:"entity_type"`
-	IsHub                 bool                    `json:"is_hub"`
-	Counterparties        []*CounterpartyActivity `json:"counterparties"`
-	RecentTransactions    []*Transaction          `json:"recent_transactions"`
-	Notes                 []*InvestigatorNote     `json:"notes"`
-	Tags                  []*AddressTag           `json:"tags"`
+	Address               string                      `json:"address"`
+	Balance               string                      `json:"balance"`
+	IsContract            bool                        `json:"is_contract"`
+	FirstSeen             time.Time                   `json:"first_seen"`
+	LastSeen              time.Time                   `json:"last_seen"`
+	SentCount             int64                       `json:"sent_count"`
+	ReceivedCount         int64                       `json:"received_count"`
+	TotalCount            int64                       `json:"total_count"`
+	TotalSent             string                      `json:"total_sent"`
+	TotalReceived         string                      `json:"total_received"`
+	FlagCount             int64                       `json:"flag_count"`
+	HighSeverityFlagCount int64                       `json:"high_severity_flag_count"`
+	RiskLevel             string                      `json:"risk_level"`
+	EntityName            string                      `json:"entity_name"`
+	EntityType            string                      `json:"entity_type"`
+	IsHub                 bool                        `json:"is_hub"`
+	Counterparties        []*CounterpartyActivity     `json:"counterparties"`
+	RecentTransactions    []*Transaction              `json:"recent_transactions"`
+	Notes                 []*InvestigatorNote         `json:"notes"`
+	Tags                  []*AddressTag               `json:"tags"`
+	Cases                 []*InvestigationCaseSummary `json:"cases"`
 }
 
 type ContractDetail struct {
