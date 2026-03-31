@@ -140,8 +140,9 @@ export default async function GraphPage({
                 <Badge variant="danger">high risk</Badge>
               </div>
               <p>
-                Click a node label to pivot into the account dossier. Change the
-                graph center with the trace controls above when you want to keep
+                Click any node, or any visible node label, to pivot into the
+                account dossier. Labels are prioritized to reduce clutter, and
+                the trace controls above let you recenter the graph as you keep
                 following the money.
               </p>
             </CardContent>

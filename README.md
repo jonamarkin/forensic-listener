@@ -1,5 +1,11 @@
 # Forensic Listener
 
+## Submission Package
+
+The full professor-facing project report is available at:
+
+- [`docs/submission-report.md`](docs/submission-report.md)
+
 ## Database Systems Project
 
 Forensic Listener is an Ethereum monitoring and investigation system built as a

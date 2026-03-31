@@ -210,22 +210,32 @@ export default async function AccountPage({
               <CardHeader>
                 <CardTitle className="text-white">Recent transactions</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3 overflow-x-hidden">
                 {profile.recent_transactions.length ? (
                   profile.recent_transactions.slice(0, 8).map((tx) => (
                     <Link
                       key={tx.hash}
                       href={`/transactions/${encodeURIComponent(tx.hash)}`}
-                      className="rounded-[22px] border border-white/8 bg-slate-950/70 p-4"
+                      className="block w-full min-w-0 rounded-[22px] border border-white/8 bg-slate-950/70 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
                     >
-                      <div className="font-mono text-xs text-cyan-100">
-                        {formatAddress(tx.hash, 10)}
-                      </div>
-                      <div className="mt-2 text-sm text-slate-300/78">
-                        {formatAddress(tx.from)} → {formatAddress(tx.to || "contract")}
-                      </div>
-                      <div className="mt-1 text-sm text-slate-300/78">
-                        {formatWeiToEth(tx.value)} · {formatDateTime(tx.timestamp)}
+                      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-xs text-cyan-100 [overflow-wrap:anywhere]">
+                            {formatAddress(tx.hash, 10)}
+                          </div>
+                          <div className="mt-2 text-sm text-slate-300/78 [overflow-wrap:anywhere]">
+                            {formatAddress(tx.from, 7)} →{" "}
+                            {tx.to ? formatAddress(tx.to, 7) : "contract creation"}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-left sm:text-right">
+                          <div className="text-sm font-semibold text-white">
+                            {formatWeiToEth(tx.value)}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-300/78">
+                            {formatDateTime(tx.timestamp)}
+                          </div>
+                        </div>
                       </div>
                     </Link>
                   ))

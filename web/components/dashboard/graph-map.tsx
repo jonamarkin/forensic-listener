@@ -32,6 +32,23 @@ function nodeColors(node: GraphNode) {
   };
 }
 
+function nodePriority(node: GraphNode, centerId: string) {
+  if (node.id === centerId) {
+    return 1000;
+  }
+  let priority = node.degree;
+  if (node.is_hub) {
+    priority += 120;
+  }
+  if (node.risk_level?.toLowerCase() === "high") {
+    priority += 90;
+  }
+  if (node.is_contract) {
+    priority += 24;
+  }
+  return priority;
+}
+
 export function GraphMap({
   graph,
   depth,
@@ -47,12 +64,16 @@ export function GraphMap({
     );
   }
 
-  const width = 820;
-  const height = 520;
+  const width = 980;
+  const height = 620;
   const centerX = width / 2;
   const centerY = height / 2;
   const centerNode = graph.nodes.find((node) => node.id === graph.center) || graph.nodes[0];
-  const orbitNodes = graph.nodes.filter((node) => node.id !== centerNode.id);
+  const orbitNodes = [...graph.nodes]
+    .filter((node) => node.id !== centerNode.id)
+    .sort((left, right) => {
+      return nodePriority(right, centerNode.id) - nodePriority(left, centerNode.id);
+    });
   const positions = new Map<string, { x: number; y: number; radius: number; node: GraphNode }>();
 
   positions.set(centerNode.id, {
@@ -62,18 +83,34 @@ export function GraphMap({
     node: centerNode,
   });
 
-  orbitNodes.forEach((node, index) => {
-    const ring = index % Math.max(depth + 1, 2);
-    const ringSize = 150 + ring * 58;
-    const sliceCount = Math.max(orbitNodes.length, 1);
-    const angle = (index / sliceCount) * Math.PI * 2;
-    positions.set(node.id, {
-      x: centerX + Math.cos(angle) * ringSize,
-      y: centerY + Math.sin(angle) * ringSize * 0.72,
-      radius: node.is_hub ? 24 : node.is_contract ? 20 : 18,
-      node,
+  let cursor = 0;
+  for (let ringIndex = 1; cursor < orbitNodes.length; ringIndex += 1) {
+    const ringCapacity = 6 + (ringIndex - 1) * 4;
+    const ringNodes = orbitNodes.slice(cursor, cursor + ringCapacity);
+    const angleOffset = -Math.PI / 2 + (ringIndex % 2 === 0 ? Math.PI / ringNodes.length : 0);
+    const ringSize = 138 + (ringIndex - 1) * 92;
+
+    ringNodes.forEach((node, index) => {
+      const angle = angleOffset + (index / ringNodes.length) * Math.PI * 2;
+      positions.set(node.id, {
+        x: centerX + Math.cos(angle) * ringSize,
+        y: centerY + Math.sin(angle) * ringSize * 0.76,
+        radius: node.is_hub ? 24 : node.is_contract ? 20 : 18,
+        node,
+      });
     });
-  });
+
+    cursor += ringCapacity;
+  }
+
+  const labelBudget = graph.nodes.length <= 10 ? graph.nodes.length : 9;
+  const labeledNodeIds = new Set(
+    [...graph.nodes]
+      .sort((left, right) => nodePriority(right, centerNode.id) - nodePriority(left, centerNode.id))
+      .slice(0, labelBudget)
+      .map((node) => node.id),
+  );
+  const hiddenLabelCount = Math.max(graph.nodes.length - labeledNodeIds.size, 0);
 
   return (
     <div className="overflow-hidden rounded-[30px] border border-white/8 bg-[radial-gradient(circle_at_center,rgba(8,47,73,0.46),rgba(2,6,23,0.92))]">
@@ -85,21 +122,26 @@ export function GraphMap({
           Centered on {centerNode.entity_name || formatAddress(centerNode.id)} with{" "}
           {graph.nodes.length} nodes and {graph.edges.length} directional edges.
         </p>
+        {hiddenLabelCount ? (
+          <p className="mt-2 text-xs text-slate-400">
+            Labels are prioritized to keep the map readable. Every node is still clickable.
+          </p>
+        ) : null}
       </div>
       <div className="overflow-x-auto">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-[360px] min-w-[760px] w-full sm:h-[440px] lg:h-[520px]"
+          className="h-[360px] min-w-[720px] w-full sm:h-[460px] lg:h-[580px]"
           role="img"
           aria-label="Transaction flow graph"
         >
-          {[1, 2, 3].map((ring) => (
+          {[1, 2, 3, 4].map((ring) => (
             <ellipse
               key={ring}
               cx={centerX}
               cy={centerY}
-              rx={ring * 150}
-              ry={ring * 108}
+              rx={ring * 138}
+              ry={ring * 104}
               fill="none"
               stroke="rgba(148, 163, 184, 0.08)"
               strokeDasharray="6 12"
@@ -118,8 +160,12 @@ export function GraphMap({
                 y1={from.y}
                 x2={to.x}
                 y2={to.y}
-                stroke="rgba(56, 189, 248, 0.26)"
-                strokeWidth={edge.from === centerNode.id || edge.to === centerNode.id ? 2.4 : 1.4}
+                stroke={
+                  edge.from === centerNode.id || edge.to === centerNode.id
+                    ? "rgba(56, 189, 248, 0.34)"
+                    : "rgba(56, 189, 248, 0.18)"
+                }
+                strokeWidth={edge.from === centerNode.id || edge.to === centerNode.id ? 2.2 : 1.1}
               />
             );
           })}
@@ -128,30 +174,39 @@ export function GraphMap({
             const colors = nodeColors(node);
             const label = node.entity_name || formatAddress(node.id, 5);
             const isCenter = node.id === centerNode.id;
+            const href = `/accounts/${encodeURIComponent(node.id)}`;
+            const showLabel = labeledNodeIds.has(node.id);
 
             return (
               <g key={node.id}>
-                <circle cx={x} cy={y} r={radius + 8} fill={colors.ring} />
-                <circle cx={x} cy={y} r={radius} fill={colors.fill} />
-                <foreignObject
-                  x={x - (isCenter ? 88 : 74)}
-                  y={y + radius + 12}
-                  width={isCenter ? 176 : 148}
-                  height="48"
-                >
-                  <Link
-                    href={`/accounts/${encodeURIComponent(node.id)}`}
-                    className={cn(
-                      "block rounded-2xl border bg-slate-950/80 px-3 py-2 text-center text-xs shadow-lg backdrop-blur",
-                      riskTone(node.risk_level),
-                    )}
+                <a href={href} aria-label={`Open dossier for ${node.id}`}>
+                  <title>
+                    {label} · {node.entity_type || (node.is_contract ? "contract" : "wallet")}
+                  </title>
+                  <circle cx={x} cy={y} r={radius + 8} fill={colors.ring} />
+                  <circle cx={x} cy={y} r={radius} fill={colors.fill} />
+                </a>
+                {showLabel ? (
+                  <foreignObject
+                    x={x - (isCenter ? 92 : 76)}
+                    y={y + radius + 12}
+                    width={isCenter ? 184 : 152}
+                    height="48"
                   >
-                    <div className="truncate font-semibold text-white">{label}</div>
-                    <div className="truncate text-[11px] uppercase tracking-[0.14em] text-slate-200/80">
-                      {node.entity_type || (node.is_contract ? "contract" : "wallet")}
-                    </div>
-                  </Link>
-                </foreignObject>
+                    <Link
+                      href={href}
+                      className={cn(
+                        "block rounded-2xl border bg-slate-950/80 px-3 py-2 text-center text-xs shadow-lg backdrop-blur",
+                        riskTone(node.risk_level),
+                      )}
+                    >
+                      <div className="truncate font-semibold text-white">{label}</div>
+                      <div className="truncate text-[11px] uppercase tracking-[0.14em] text-slate-200/80">
+                        {node.entity_type || (node.is_contract ? "contract" : "wallet")}
+                      </div>
+                    </Link>
+                  </foreignObject>
+                ) : null}
               </g>
             );
           })}
