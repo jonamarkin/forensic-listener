@@ -4,6 +4,20 @@
 
 ### Database Systems Project
 
+### Submission Metadata
+
+Fill in the personal course details below before the final submission upload.
+
+| Field | Value |
+| --- | --- |
+| Student name | `[Insert student name]` |
+| Student ID | `[Insert student ID]` |
+| Course name / code | `[Insert course name and code]` |
+| Professor / supervisor | `[Insert professor name]` |
+| Submission date | `March 31, 2026` |
+| Repository URL | `https://github.com/jonamarkin/forensic-listener` |
+| Submitted commit | `4be5bd2` |
+
 **Project theme:** Ethereum forensic investigation system using polyglot persistence  
 **Primary academic focus:** database design, schema design, data modeling, indexing, and query architecture  
 **Repository:** [`forensic-listener`](../)  
@@ -806,7 +820,22 @@ The Next.js frontend is organized by investigative surface:
 
 ## 17. How the Product Is Used
 
-### 17.1 Typical Analyst Flow
+### 17.1 Suggested Demonstration Flow
+
+This is the recommended route for a live demonstration to a lecturer or other
+external reviewer:
+
+1. Open **Overview** and explain that it is built from relational aggregates in
+   PostgreSQL plus live backend metrics.
+2. Open **Alerts** and show that flags can be triaged rather than only viewed.
+3. Update a flag with status, assignee, note, and optional case link.
+4. Pivot into the linked **Account Dossier** and explain how notes, tags,
+   counterparties, recent transactions, and behavior features are assembled.
+5. Open **Flow Canvas** and demonstrate graph tracing through Neo4j.
+6. Open a **Transaction Investigation** page and show linked flags and context.
+7. Open **Cases** and export a markdown **Case Report**.
+
+### 17.2 Typical Analyst Flow
 
 1. Open **Overview** to monitor health, recent activity, and suspicious pressure.
 2. Open **Alerts** to inspect recent raised flags.
@@ -818,7 +847,7 @@ The Next.js frontend is organized by investigative surface:
 6. Open or update a **Case** so the investigation becomes persistent.
 7. Export a **Case Report** when a summary artifact is needed.
 
-### 17.2 Why This Is Useful in the Current State
+### 17.3 Why This Is Useful in the Current State
 
 The system is already useful for:
 
@@ -987,6 +1016,11 @@ become clearer.
 
 ## 23. Code Links
 
+### 23.1 Repository Traceability
+
+- canonical repository URL: `https://github.com/jonamarkin/forensic-listener`
+- submitted commit for this report snapshot: `4be5bd2`
+
 ### Backend
 
 - startup and orchestration: [`main.go`](../main.go)
@@ -1013,6 +1047,21 @@ become clearer.
 - account dossier: [`web/app/accounts/[address]/page.tsx`](../web/app/accounts/[address]/page.tsx)
 - transaction investigation: [`web/app/transactions/[hash]/page.tsx`](../web/app/transactions/[hash]/page.tsx)
 - flow canvas: [`web/app/graph/page.tsx`](../web/app/graph/page.tsx)
+
+### 23.2 Submission Asset Checklist
+
+For a final PDF or LMS upload, the following additions are recommended:
+
+- export the Mermaid diagrams as static images in case the grading viewer does
+  not render Mermaid
+- include screenshots of:
+  - Overview
+  - Alerts with triage controls visible
+  - Graph / Flow Canvas
+  - Account Dossier
+  - Cases or Case Report export
+- keep the repository URL and submitted commit hash together with the report so
+  the code version is unambiguous
 
 ---
 
