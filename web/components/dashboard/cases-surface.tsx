@@ -27,7 +27,7 @@ import {
 } from "@/lib/utils";
 
 const selectClassName =
-  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/80 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/40";
+  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/70 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15";
 
 type CasesSurfaceProps = {
   initialCases: InvestigationCaseSummary[];
@@ -122,12 +122,12 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
     <div className="space-y-6 pb-10">
       <PageHeading
         eyebrow="Cases"
-        title="Run investigations as saved work, not memory."
-        description="Cases gather addresses, linked alerts, ownership, and status into one investigative workspace. This is where the investigator role becomes durable instead of session-based."
+        title="Investigation cases"
+        description="Preserve addresses, linked alerts, ownership, and status in structured investigations."
         actions={
           <Button asChild>
             <Link href="/alerts">
-              Review alert queue
+              Open alerts
               <ArrowRight className="size-4" />
             </Link>
           </Button>

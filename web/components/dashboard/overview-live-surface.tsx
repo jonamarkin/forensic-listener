@@ -125,20 +125,20 @@ export function OverviewLiveSurface({
   return (
     <div className="space-y-6 pb-10">
       <PageHeading
-        eyebrow="Command View"
-        title="System pulse and investigative launch points."
-        description="Overview keeps the operator grounded: ingestion health, enrichment backlog, network throughput, and the first addresses worth pivoting into."
+        eyebrow="Overview"
+        title="Operational overview"
+        description="Monitor ingestion health, queue pressure, recent activity, and the strongest investigative starting points."
         actions={
           <>
             <Button asChild variant="secondary">
               <Link href="/graph">
-                Open Flow Canvas
+                Open graph
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
             <Button asChild>
               <Link href="/alerts">
-                Review Active Alerts
+                Open alerts
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
@@ -150,28 +150,28 @@ export function OverviewLiveSurface({
         <MetricCard
           eyebrow="Transactions"
           value={formatCount(overview?.transaction_count ?? 0)}
-          description="Total observed Ethereum transactions indexed into the forensic surface."
+          description="Observed Ethereum transactions indexed into the investigation surface."
           accent={<WalletCards className="size-6" />}
           footer={`Latest seen ${formatDateTime(overview?.latest_transaction_at)}`}
         />
         <MetricCard
           eyebrow="Accounts"
           value={formatCount(overview?.account_count ?? 0)}
-          description="Tracked wallets and entities available for graph traversal and dossier drill-down."
+          description="Tracked wallets and entities available for tracing and dossier review."
           accent={<Network className="size-6" />}
           footer={`${formatCount(overview?.contract_count ?? 0)} contracts modeled`}
         />
         <MetricCard
           eyebrow="Flags"
           value={formatCount(overview?.flag_count ?? 0)}
-          description="Raised anomalies across circular flows, contract similarity, and other forensic heuristics."
+          description="Raised anomalies from circular flows, similarity checks, and other heuristics."
           accent={<Flag className="size-6" />}
           footer={`${highSeverityCount} recent high-severity hits`}
         />
         <MetricCard
           eyebrow="Enrichment Queue"
           value={formatCount(queueDepth)}
-          description="Backlog still waiting on enrichment workers, retries, or processing slots."
+          description="Backlog waiting on enrichment workers, retries, or processing slots."
           accent={<Sparkles className="size-6" />}
           footer={`${formatCount(enrichment?.done ?? 0)} completed so far`}
         />
@@ -184,7 +184,7 @@ export function OverviewLiveSurface({
               <div>
                 <CardTitle className="text-white">Network velocity</CardTitle>
                 <CardDescription>
-                  Twenty-four hour transaction volume mapped into a calmer operating view.
+                  Twenty-four hour throughput and recent network context.
                 </CardDescription>
               </div>
               <div className="rounded-2xl border border-cyan-300/18 bg-cyan-400/8 px-4 py-3 text-right">
@@ -232,7 +232,7 @@ export function OverviewLiveSurface({
           <CardHeader>
             <CardTitle className="text-white">Enrichment posture</CardTitle>
             <CardDescription>
-              Queue pressure, retries, and the oldest work still waiting.
+              Queue pressure, retries, and the oldest unprocessed work.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -279,8 +279,8 @@ export function OverviewLiveSurface({
                 {formatDateTime(enrichment?.oldest_pending_at)}
               </p>
               <p className="mt-2 text-sm text-slate-300/76">
-                Use this when triaging whether the ingestion pipeline is keeping
-                up with enrichment demand.
+                Use this to judge whether the pipeline is keeping pace with
+                enrichment demand.
               </p>
             </div>
           </CardContent>
@@ -292,7 +292,7 @@ export function OverviewLiveSurface({
           <CardHeader>
             <CardTitle className="text-white">High-activity addresses</CardTitle>
             <CardDescription>
-              Fast pivots into the most active wallets and contracts currently surfaced.
+              Fast pivots into the most active wallets and contracts.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -328,7 +328,7 @@ export function OverviewLiveSurface({
           <CardHeader>
             <CardTitle className="text-white">Recent forensic flags</CardTitle>
             <CardDescription>
-              The newest anomalies, already shaped into investigation pivots.
+              Newly raised anomalies ready for review.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -373,14 +373,13 @@ export function OverviewLiveSurface({
           <CardHeader>
             <CardTitle className="text-white">Latest transactions</CardTitle>
             <CardDescription>
-              Ledger-style feed for immediate manual inspection and address pivoting.
+              Recent ledger activity for manual inspection and quick pivots.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {recentTransactions.map((tx) => (
-              <Link
+              <div
                 key={tx.hash}
-                href={`/transactions/${encodeURIComponent(tx.hash)}`}
                 className="w-full min-w-0 max-w-full rounded-[24px] border border-white/8 bg-black/20 p-4"
               >
                 <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -413,7 +412,15 @@ export function OverviewLiveSurface({
                     </div>
                   </div>
                 </div>
-              </Link>
+                <div className="mt-4 flex justify-start sm:justify-end">
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href={`/transactions/${encodeURIComponent(tx.hash)}`}>
+                      Open transaction
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
             ))}
           </CardContent>
         </Card>
@@ -422,7 +429,7 @@ export function OverviewLiveSurface({
           <CardHeader>
             <CardTitle className="text-white">Recent contract intelligence</CardTitle>
             <CardDescription>
-              Newly observed contracts ready for vector similarity and code review.
+              Newly observed contracts ready for similarity and code review.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

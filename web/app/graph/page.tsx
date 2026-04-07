@@ -56,15 +56,15 @@ export default async function GraphPage({
   return (
     <div className="space-y-6 pb-10">
       <PageHeading
-        eyebrow="Neo4j Flow Canvas"
-        title="Trace value movement with room to think."
-        description="Search one address, set a hop depth, and keep pathfinding, hubs, and address pivots in one focused graph route instead of burying them under every other widget."
+        eyebrow="Graph analysis"
+        title="Trace value movement"
+        description="Search one address, set a hop depth, and inspect graph paths, hubs, and address pivots in one place."
       />
 
       <Card>
         <CardHeader>
           <CardTitle className="text-white">Trace controls</CardTitle>
-          <CardDescription>
+            <CardDescription>
             Adjust graph scope and optionally request a concrete return or destination path.
           </CardDescription>
         </CardHeader>
@@ -78,7 +78,7 @@ export default async function GraphPage({
             <select
               name="depth"
               defaultValue={String(depth)}
-              className="flex h-11 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm text-slate-50 outline-none focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/20"
+              className="flex h-11 rounded-2xl border border-white/10 bg-slate-950/70 px-4 text-sm text-slate-50 outline-none focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15"
             >
               {[1, 2, 3, 4].map((option) => (
                 <option key={option} value={option} className="bg-slate-950">
@@ -109,7 +109,7 @@ export default async function GraphPage({
         <MetricCard
           eyebrow="Contracts"
           value={formatCount(contractNodes)}
-          description="Contracts in the active path neighborhood, useful for quick code pivots."
+          description="Contracts in the active path neighborhood, useful for code pivots."
           accent={<Compass className="size-6" />}
         />
         <MetricCard
@@ -152,7 +152,7 @@ export default async function GraphPage({
             <CardHeader>
               <CardTitle className="text-white">Known hubs</CardTitle>
               <CardDescription>
-                A fast shortlist of entities worth expanding first.
+                A shortlist of entities worth expanding first.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

@@ -39,7 +39,7 @@ import {
 
 const ANALYTICS_REFRESH_MS = 20_000;
 const selectClassName =
-  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/80 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/40";
+  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/70 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15";
 
 type AlertsLiveSurfaceProps = {
   initialVelocityAlerts: VelocityAlert[];
@@ -202,20 +202,20 @@ export function AlertsLiveSurface({
   return (
     <div className="space-y-6 pb-10">
       <PageHeading
-        eyebrow="Alert Deck"
-        title="Keep the spikes loud and the loops obvious."
-        description="Alerts is the analyst queue: review suspicious spikes, connect raised flags to live cases, and preserve triage decisions instead of treating alerts as disposable feed items."
+        eyebrow="Alerts"
+        title="Triage suspicious activity"
+        description="Review raised flags, inspect network context, and preserve analyst decisions in linked cases."
         actions={
           <>
             <Button asChild variant="secondary">
               <Link href="/cases">
-                Open case queue
+                Open cases
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
             <Button asChild>
               <Link href="/graph">
-                Pivot into graph tracing
+                Open graph
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
@@ -227,13 +227,13 @@ export function AlertsLiveSurface({
         <MetricCard
           eyebrow="Velocity alerts"
           value={formatCount(velocityAlerts.length)}
-          description="Addresses whose current activity spikes well above their observed baseline."
+          description="Addresses whose current activity is well above baseline."
           accent={<Radar className="size-6" />}
         />
         <MetricCard
           eyebrow="Circular flows"
           value={formatCount(circularFlows.length)}
-          description="Loop-like movement patterns that deserve quick laundering or wash tracing review."
+          description="Loop-like movement patterns that deserve quick review."
           accent={<RotateCcw className="size-6" />}
         />
         <MetricCard
@@ -249,7 +249,7 @@ export function AlertsLiveSurface({
           <CardHeader>
             <CardTitle className="text-white">Activity pressure</CardTitle>
             <CardDescription>
-              Network-wide throughput trend for situational context while triaging spikes.
+              Network-wide throughput context while triaging spikes.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -286,7 +286,7 @@ export function AlertsLiveSurface({
               <CardTitle className="text-white">Velocity alerts</CardTitle>
             </div>
             <CardDescription>
-              The addresses most worth opening as dossiers first.
+              Addresses most worth opening as dossiers first.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -333,7 +333,7 @@ export function AlertsLiveSurface({
           <CardHeader>
             <CardTitle className="text-white">Circular flow patterns</CardTitle>
             <CardDescription>
-              Short return paths and loops already surfaced by the graph engine.
+              Short return paths and loops surfaced by the graph engine.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -447,7 +447,7 @@ export function AlertsLiveSurface({
 
                     <div className="mt-4 space-y-3 rounded-[22px] border border-white/10 bg-black/20 p-4">
                       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100/76">
-                        Triage controls
+                        Review
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <select
@@ -489,8 +489,8 @@ export function AlertsLiveSurface({
                         </select>
                         <div className="text-xs text-slate-300/72 sm:self-center">
                           {caseOptions.length
-                            ? "Link this flag into an active investigation case."
-                            : "Open a case from the Cases route to start linking alerts."}
+                            ? "Link this flag into an active case."
+                            : "Create a case first if you want to preserve this alert in an investigation."}
                         </div>
                       </div>
 
@@ -501,7 +501,7 @@ export function AlertsLiveSurface({
                             analyst_note: event.target.value,
                           })
                         }
-                        placeholder="Analyst note: why it matters, what to verify, what to do next."
+                        placeholder="Analyst note: relevance, follow-up, and next step."
                       />
 
                       <div className="space-y-1 text-sm text-slate-100/80">

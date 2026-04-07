@@ -1,0 +1,451 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+\setlist[itemize]{leftmargin=1.5em}
+\setlist[enumerate]{leftmargin=1.8em}
+
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\begin{document}
+
+\begin{center}
+{\LARGE \textbf{Forensic Listener}}\\[0.35em]
+{\large Concise Course Report}
+\end{center}
+
+\section*{Submission Metadata}
+
+\begin{tabularx}{\textwidth}{@{}p{0.34\textwidth}Y@{}}
+\toprule
+\textbf{Field} & \textbf{Value} \\
+\midrule
+Student name & [Insert student name] \\
+Student ID & [Insert student ID] \\
+Course name / code & [Insert course name and code] \\
+Professor / supervisor & [Insert professor name] \\
+Submission date & March 31, 2026 \\
+Repository URL & \url{https://github.com/jonamarkin/forensic-listener} \\
+Submitted commit & \texttt{4be5bd2} \\
+\bottomrule
+\end{tabularx}
+
+\section{Executive Summary}
+
+Forensic Listener is a database-centric Ethereum forensic investigation system.
+The project was built to answer a database systems question:
+
+\begin{quote}
+How should Ethereum forensic data be modeled when the application must support
+relational queries, graph traversal, and similarity search?
+\end{quote}
+
+The final design uses:
+
+\begin{itemize}
+\item \textbf{PostgreSQL} for transactions, accounts, flags, notes, tags,
+cases, and contract metadata
+\item \textbf{Neo4j} for multi-hop tracing, hub discovery, and circular-flow
+analysis
+\item \textbf{pgvector} inside PostgreSQL for contract and behavior similarity
+\end{itemize}
+
+The implementation consists of a Go backend for ingestion and API delivery, and
+a Next.js frontend for analyst workflows. The current system supports account
+dossiers, alert triage, graph tracing, contract similarity, transaction
+inspection, and case management.
+
+The system ingests live Ethereum transaction data through a WebSocket feed. In
+addition, it bootstraps a small curated known-entity reference set so that
+well-known tokens, routers, and hubs can be labeled from the beginning of an
+investigation. This seeded reference layer improves interpretability, but it
+does not replace live blockchain ingestion.
+
+\section{User Stories, Use Cases, Requirements, and Assumptions}
+
+\subsection{Main Roles}
+
+\begin{tabularx}{\textwidth}{@{}p{0.3\textwidth}Y@{}}
+\toprule
+\textbf{Role} & \textbf{Purpose in the system} \\
+\midrule
+Blockchain Investigator & Investigates addresses, transactions, and money flows \\
+Compliance / Risk Analyst & Reviews and triages suspicious alerts \\
+Smart Contract Analyst & Compares suspicious contracts and metadata \\
+\bottomrule
+\end{tabularx}
+
+\subsection{User Stories and Use Cases}
+
+\begin{longtable}{@{}p{0.18\textwidth}p{0.63\textwidth}p{0.11\textwidth}@{}}
+\toprule
+\textbf{Role} & \textbf{User story / use case} & \textbf{Status} \\
+\midrule
+\endhead
+Investigator & Open an account dossier with counterparties, notes, tags, and recent transactions & Implemented \\
+Investigator & Trace funds through a graph and inspect circular flows & Implemented \\
+Investigator & Open a transaction investigation page and inspect linked flags & Implemented \\
+Investigator & Create a case and attach addresses to it & Implemented \\
+Analyst & Review recent flags and triage them with status, assignee, and note & Implemented \\
+Analyst & Link a triaged flag to a case & Implemented \\
+Contract analyst & Open a contract intelligence page and inspect similar contracts & Implemented \\
+Analyst & Use watchlists and saved searches & Future \\
+Multi-user team & Work with authentication, ownership, and role-based permissions & Future \\
+\bottomrule
+\end{longtable}
+
+\subsection{Functional Requirements}
+
+\begin{itemize}
+\item ingest Ethereum transaction activity
+\item store accounts and transactions with relational integrity
+\item detect and store forensic flags
+\item support graph tracing and circular-flow analysis
+\item support contract and behavior similarity search
+\item support notes, tags, and investigation cases
+\item support alert triage and report export
+\item expose the system through a web interface
+\end{itemize}
+
+\subsection{Assumptions}
+
+\begin{itemize}
+\item the system is intended for analysts, not casual public users
+\item forensic flags are heuristic leads, not proof of wrongdoing
+\item similarity scores indicate resemblance, not identity
+\item graph results depend on the completeness of ingested transaction data
+\item curated entity labels are limited by the quality of the seed dataset
+\end{itemize}
+
+\section{System Architecture and Implementation Overview}
+
+\subsection{Architecture}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  node distance=1.6cm and 1.6cm,
+  box/.style={draw, rounded corners, align=center, minimum width=2.6cm, minimum height=1cm},
+  arr/.style={-{Latex[length=2.4mm]}, thick}
+]
+\node[box] (eth) {Ethereum\\WebSocket Feed};
+\node[box, right=of eth] (ing) {Go Ingestion\\Layer};
+\node[box, right=of ing] (pg) {PostgreSQL};
+\node[box, below=of pg] (neo) {Neo4j};
+\node[box, below=of ing] (api) {Go API};
+\node[box, right=of api] (web) {Next.js\\Dashboard};
+\node[box, left=of api] (user) {Analyst};
+\node[box, above=of pg] (vec) {pgvector in\\PostgreSQL};
+
+\draw[arr] (eth) -- (ing);
+\draw[arr] (ing) -- (pg);
+\draw[arr] (ing) -- (neo);
+\draw[arr] (pg) -- (api);
+\draw[arr] (neo) -- (api);
+\draw[arr] (vec) -- (api);
+\draw[arr] (api) -- (web);
+\draw[arr] (user) -- (web);
+\end{tikzpicture}
+\caption{High-level system architecture.}
+\end{figure}
+
+\subsection{Implementation Overview}
+
+\begin{tabularx}{\textwidth}{@{}p{0.18\textwidth}p{0.26\textwidth}Y@{}}
+\toprule
+\textbf{Layer} & \textbf{Main responsibility} & \textbf{Main implementation} \\
+\midrule
+Ingestion & Reads Ethereum activity and persists it & \path{main.go}, \path{ingestion/} \\
+Relational store & Accounts, transactions, flags, notes, tags, cases & \path{store/postgres.go} \\
+Graph store & Multi-hop paths, hubs, circular flows & \path{store/neo4j.go} \\
+Vector search & Contract and behavior similarity & \path{store/vector.go} \\
+API & Exposes routes for frontend and tools & \path{api/server.go} \\
+Frontend & Overview, alerts, graph, cases, dossiers & \path{web/app/} \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Important Implemented Product Surfaces}
+
+\begin{itemize}
+\item \textbf{Overview}: system metrics and recent activity
+\item \textbf{Alerts}: forensic flags and triage workflow
+\item \textbf{Graph}: address tracing and circular-flow analysis
+\item \textbf{Accounts}: dossier view with notes, tags, counterparties, and behavior
+\item \textbf{Transactions}: transaction detail and linked flags
+\item \textbf{Cases}: investigation workflow and report export
+\end{itemize}
+
+\section{Current Backlog}
+
+\begin{itemize}
+\item watchlists and saved searches
+\item audit history for cases and triage actions
+\item richer curated entity coverage
+\item better contract metadata ingestion
+\item stronger graph cluster views
+\item authentication and role-based access control
+\item more automated tests and benchmarking
+\end{itemize}
+
+\section{Database Schema (E-R Diagram, Keys, and Descriptions)}
+
+\subsection{Why Multiple Databases Were Used}
+
+\begin{tabularx}{\textwidth}{@{}p{0.2\textwidth}Y@{}}
+\toprule
+\textbf{Technology} & \textbf{Why it was used} \\
+\midrule
+PostgreSQL & Best fit for transactional integrity, constraints, and case-management data \\
+Neo4j & Best fit for graph traversal, pathfinding, hub analysis, and circular flows \\
+pgvector & Best fit for similarity search without introducing a separate vector service \\
+\bottomrule
+\end{tabularx}
+
+The system therefore combines two different types of data sources:
+
+\begin{itemize}
+\item \textbf{live data}: Ethereum transactions and derived forensic signals
+\item \textbf{curated reference data}: a small seeded set of known entities used
+for address labeling
+\end{itemize}
+
+\subsection{Simplified E-R Diagram}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  node distance=1.7cm and 1.6cm,
+  entity/.style={draw, rounded corners, align=center, minimum width=2.7cm, minimum height=1cm},
+  rel/.style={-{Latex[length=2.4mm]}, thick}
+]
+\node[entity] (accounts) {accounts\\PK: address};
+\node[entity, above left=of accounts] (transactions) {transactions\\PK: hash};
+\node[entity, above right=of accounts] (flags) {forensic\_flags\\PK: id};
+\node[entity, below left=of accounts] (entities) {known\_entities\\PK/FK: address};
+\node[entity, below=of accounts] (notes) {investigator\_notes\\PK: id};
+\node[entity, below right=of accounts] (tags) {address\_tags\\PK: id};
+\node[entity, right=3.4cm of flags] (cases) {investigation\_cases\\PK: id};
+\node[entity, below=of cases] (caseaddr) {case\_addresses\\PK: id};
+\node[entity, above=of cases] (triage) {flag\_triage\\PK: id};
+
+\draw[rel] (transactions) -- node[left, font=\scriptsize]{from / to} (accounts);
+\draw[rel] (flags) -- node[above, font=\scriptsize]{address} (accounts);
+\draw[rel] (flags) -- node[above, font=\scriptsize]{tx\_hash} (transactions);
+\draw[rel] (entities) -- node[left, font=\scriptsize]{label} (accounts);
+\draw[rel] (notes) -- node[left, font=\scriptsize]{notes} (accounts);
+\draw[rel] (tags) -- node[right, font=\scriptsize]{tags} (accounts);
+\draw[rel] (caseaddr) -- node[above, font=\scriptsize]{address} (accounts);
+\draw[rel] (caseaddr) -- node[right, font=\scriptsize]{case\_id} (cases);
+\draw[rel] (triage) -- node[right, font=\scriptsize]{case\_id} (cases);
+\draw[rel] (triage) -- node[above, font=\scriptsize]{flag\_id} (flags);
+\end{tikzpicture}
+\caption{Simplified E-R diagram of the core relational schema.}
+\end{figure}
+
+\subsection{Main Keys and Constraints}
+
+\begin{longtable}{@{}p{0.22\textwidth}p{0.18\textwidth}p{0.5\textwidth}@{}}
+\toprule
+\textbf{Table} & \textbf{Primary key} & \textbf{Important foreign keys / constraints} \\
+\midrule
+\endhead
+\path{accounts} & \path{address} & Base entity table for addresses \\
+\path{transactions} & \path{hash} & \path{from_address -> accounts.address}, \path{to_address -> accounts.address} \\
+\path{forensic_flags} & \path{id} & \path{tx_hash -> transactions.hash}, \path{address -> accounts.address} \\
+\path{known_entities} & \path{address} & One label row per address \\
+\path{investigator_notes} & \path{id} & \path{address -> accounts.address} \\
+\path{address_tags} & \path{id} & \path{address -> accounts.address}, unique \path{(address, tag)} \\
+\path{contract_metadata} & \path{address} & \path{address -> accounts.address} \\
+\path{contract_vectors} & \path{address} & \path{address -> accounts.address} \\
+\path{account_behavior_vectors} & \path{address} & \path{address -> accounts.address} \\
+\path{investigation_cases} & \path{id} & Status and priority are controlled workflow fields \\
+\path{case_addresses} & \path{id} & \path{case_id -> investigation_cases.id}, \path{address -> accounts.address}, unique \path{(case_id, address)} \\
+\path{flag_triage} & \path{id} & \path{flag_id -> forensic_flags.id}, \path{case_id -> investigation_cases.id} \\
+\bottomrule
+\end{longtable}
+
+\subsection{Graph and Vector Models}
+
+\begin{itemize}
+\item \textbf{Neo4j graph model}:
+  \begin{itemize}
+  \item nodes: \path{Account}
+  \item key property: \path{address}
+  \item relationships: directed transfer edges between accounts
+  \end{itemize}
+\item \textbf{pgvector usage}:
+  \begin{itemize}
+  \item \path{contract_vectors} for bytecode similarity
+  \item \path{account_behavior_vectors} for behavioral similarity
+  \end{itemize}
+\end{itemize}
+
+\section{Design Decisions and Rationale}
+
+\subsection{PostgreSQL as the Source of Truth}
+
+PostgreSQL was chosen as the main data store because the project requires
+transactional integrity, constraints, foreign keys, and efficient relational
+queries over accounts, transactions, flags, notes, tags, and cases. This makes
+it the strongest fit for the core ledger and workflow data.
+
+\textbf{Trade-off:} Some graph-shaped questions are less natural in SQL, which
+motivated the use of Neo4j for graph-native analysis.
+
+\subsection{Neo4j for Graph-Native Queries}
+
+Neo4j was added because the project needs multi-hop tracing, hub analysis, and
+circular-flow detection. These queries are naturally expressed as graph
+traversals and are easier to reason about in a graph database than in a purely
+relational model.
+
+\textbf{Trade-off:} Introducing Neo4j increases deployment and synchronization
+complexity because the system now depends on multiple databases.
+
+\subsection{pgvector Inside PostgreSQL}
+
+pgvector was used to support similarity search for contract bytecode and
+behavior profiles without introducing a separate vector service. Keeping vector
+search inside PostgreSQL makes joins with relational metadata simpler and keeps
+the overall architecture more compact.
+
+\textbf{Trade-off:} pgvector is less specialized than a dedicated vector
+database, but it is a better fit for a compact academic system.
+
+\subsection{JSONB Instead of MongoDB}
+
+The project stores some semi-structured data, especially ABI and behavior
+feature maps. These were modeled with \texttt{JSONB} inside PostgreSQL because
+the semi-structured requirements were limited and still closely tied to
+relational entities.
+
+\textbf{Trade-off:} PostgreSQL carries both relational and limited
+semi-structured data, but this keeps the system simpler than introducing a
+fourth datastore.
+
+\subsection{Separate Backend and Frontend}
+
+The Go backend and Next.js frontend were kept as separate components so that
+ingestion, data access, and API logic remain isolated from presentation logic.
+This separation also makes it easier to evolve the analyst interface without
+mixing it into ingestion and database code.
+
+\textbf{Trade-off:} The final deployment has two application runtimes rather
+than one monolithic service.
+
+\section{Links to Code}
+
+\subsection{Backend and Data Layer}
+
+\begin{itemize}
+\item startup and orchestration: \path{main.go}
+\item API routes: \path{api/server.go}
+\item relational queries: \path{store/postgres.go}
+\item graph queries: \path{store/neo4j.go}
+\item vector queries: \path{store/vector.go}
+\item flag explanations: \path{api/flag_explanations.go}
+\item case report export: \path{api/reports.go}
+\end{itemize}
+
+\subsection{Schema}
+
+\begin{itemize}
+\item base schema: \path{migrations/000001_init_schema.up.sql}
+\item enrichment queue: \path{migrations/000002_enrichment_queue.up.sql}
+\item known entities: \path{migrations/000003_known_entities.up.sql}
+\item intelligence surfaces: \path{migrations/000004_intelligence_surfaces.up.sql}
+\item case workflows: \path{migrations/000005_case_workflows.up.sql}
+\end{itemize}
+
+\subsection{Frontend}
+
+\begin{itemize}
+\item overview: \path{web/app/overview/page.tsx}
+\item alerts: \path{web/app/alerts/page.tsx}
+\item graph: \path{web/app/graph/page.tsx}
+\item account dossier: \path{web/app/accounts/[address]/page.tsx}
+\item transaction investigation: \path{web/app/transactions/[hash]/page.tsx}
+\item cases: \path{web/app/cases/page.tsx}
+\end{itemize}
+
+\section{Test Case Specifications}
+
+\begin{longtable}{@{}p{0.08\textwidth}p{0.2\textwidth}p{0.32\textwidth}p{0.3\textwidth}@{}}
+\toprule
+\textbf{ID} & \textbf{Test case} & \textbf{Procedure} & \textbf{Expected result} \\
+\midrule
+\endhead
+T1 & Backend build & Run \path{go build ./...} & Backend compiles successfully \\
+T2 & Frontend build & Run \path{pnpm build} in \path{web/} & Frontend compiles successfully \\
+T3 & Health route & Request \path{GET /health} & Returns API status JSON \\
+T4 & Account dossier & Request \texttt{GET /accounts/\{address\}/profile} & Returns account aggregates, notes, tags, and cases \\
+T5 & Graph trace & Request \texttt{GET /addresses/\{address\}/trace?...} & Returns bounded path if available \\
+T6 & Alert triage & Request \texttt{POST /flags/\{id\}/triage} & Triage state is stored \\
+T7 & Case creation & Request \path{POST /cases} & New case is created \\
+T8 & Case export & Request \texttt{GET /cases/\{id\}/report} & Markdown report downloads \\
+T9 & Contract similarity & Request \texttt{GET /contracts/\{address\}/similar} & Similar contracts are returned \\
+T10 & Transaction investigation & Open \texttt{/transactions/[hash]} & Transaction detail and linked flags are shown \\
+\bottomrule
+\end{longtable}
+
+\section{System Limitations and Possibilities for Improvement}
+
+\subsection{Current Limitations}
+
+\begin{itemize}
+\item entity coverage is still limited to a seeded dataset
+\item watchlists and saved searches are not yet implemented
+\item authentication and role-based access control are not yet implemented
+\item multi-user collaboration is not yet implemented
+\item graph clustering beyond single-address tracing is not yet implemented
+\item automated tests and formal query benchmarks are still limited
+\item forensic flags and similarity outputs are heuristic, not definitive proof
+\end{itemize}
+
+\subsection{Improvements}
+
+\begin{itemize}
+\item add watchlists and saved searches
+\item add audit history for case and triage actions
+\item expand known-entity coverage
+\item improve contract metadata ingestion
+\item add stronger graph cluster views
+\item add authentication and multi-user permissions
+\item add more automated testing and benchmarking
+\end{itemize}
+
+\section{Conclusion}
+
+Forensic Listener is a database systems project built around a real forensic use
+case. Its main contribution is showing how relational, graph, and vector models
+can be combined in one application:
+
+\begin{itemize}
+\item PostgreSQL answers structured ledger and workflow questions
+\item Neo4j answers multi-hop connection questions
+\item pgvector answers similarity questions
+\end{itemize}
+
+The system is already usable as a prototype for analyst workflows, and it also
+demonstrates the database design decisions, trade-offs, and schema modeling
+expected in a database course project.
+
+\end{document}

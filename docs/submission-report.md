@@ -24,6 +24,27 @@ Fill in the personal course details below before the final submission upload.
 
 ---
 
+### Course Documentation Checklist
+
+The report below matches the required course documentation items as follows:
+
+| Required item from course brief | Where it appears in this report |
+| --- | --- |
+| Executive summary | Section 1 |
+| User stories, use-cases, requirements, assumptions | Sections 4 to 8 |
+| System architecture description and implementation overview | Sections 9 to 16 |
+| Current backlog | Section 19 |
+| Database schema (E-R diagram) with key descriptions | Sections 12 to 14 |
+| Links to code | Section 23 |
+| Test case specifications | Section 18 |
+| System limitations and possibilities for improvement | Sections 20 to 21 |
+
+Sections 2 and 3 are included as supporting context so that a third-party
+reader understands the problem and product scope before the detailed technical
+material begins.
+
+---
+
 ## 1. Executive Summary
 
 Forensic Listener is a database-centric Ethereum monitoring and investigation

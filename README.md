@@ -2,7 +2,12 @@
 
 ## Submission Package
 
-The full professor-facing project report is available at:
+The concise professor-facing report is available in both LaTeX and Markdown:
+
+- [`docs/professor-report.tex`](docs/professor-report.tex)
+- [`docs/professor-report.md`](docs/professor-report.md)
+
+The longer extended report is still available at:
 
 - [`docs/submission-report.md`](docs/submission-report.md)
 

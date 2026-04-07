@@ -256,7 +256,7 @@ export default async function ContractPage({
               </p>
               <p>
                 If the contract is moving value unusually fast, pivot to the
-                account dossier and then into the Flow Canvas for multi-hop
+                account dossier and then into the graph view for multi-hop
                 tracing.
               </p>
             </CardContent>

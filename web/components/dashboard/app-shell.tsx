@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
-  AlertTriangle,
   BriefcaseBusiness,
   Compass,
   FileCode2,
@@ -25,31 +24,31 @@ const navItems = [
   {
     href: "/overview",
     label: "Overview",
-    description: "Health, throughput, and entity surface.",
+    description: "System health and recent activity.",
     icon: Compass,
   },
   {
     href: "/graph",
     label: "Flow Canvas",
-    description: "Neo4j tracing, hubs, and path expansion.",
+    description: "Tracing, hubs, and path expansion.",
     icon: Network,
   },
   {
     href: "/alerts",
     label: "Alerts",
-    description: "Velocity spikes, circular loops, and live issues.",
+    description: "Flags, spikes, and triage.",
     icon: ShieldAlert,
   },
   {
     href: "/cases",
     label: "Cases",
-    description: "Saved investigations, ownership, and linked evidence.",
+    description: "Saved investigations and evidence.",
     icon: BriefcaseBusiness,
   },
   {
     href: "/contracts",
     label: "Contracts",
-    description: "Bytecode intelligence and clone review.",
+    description: "Code intelligence and similarity.",
     icon: FileCode2,
   },
 ];
@@ -73,17 +72,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             key={`${mode}:${item.href}`}
             href={item.href}
             className={cn(
-              "group flex items-start gap-4 rounded-[24px] border px-4 py-4 transition-all",
+              "group flex items-start gap-4 rounded-[22px] border px-4 py-4 transition-all",
               active
-                ? "border-cyan-300/30 bg-cyan-400/10 shadow-[0_12px_40px_rgba(34,211,238,0.08)]"
-                : "border-transparent bg-white/[0.02] hover:border-white/8 hover:bg-white/[0.05]",
+                ? "border-cyan-300/25 bg-cyan-400/[0.08] shadow-[0_12px_36px_rgba(34,193,195,0.08)]"
+                : "border-transparent bg-white/[0.02] hover:border-white/8 hover:bg-white/[0.04]",
             )}
           >
             <span
               className={cn(
                 "mt-0.5 flex size-10 items-center justify-center rounded-2xl border",
                 active
-                  ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-100"
+                  ? "border-cyan-300/25 bg-cyan-400/[0.08] text-cyan-100"
                   : "border-white/8 bg-white/5 text-slate-300 group-hover:text-white",
               )}
             >
@@ -104,21 +103,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-[radial-gradient(circle_at_top,rgba(6,182,212,0.16),transparent_28%),radial-gradient(circle_at_80%_10%,rgba(16,185,129,0.14),transparent_25%),linear-gradient(180deg,#020617,#020b16_45%,#020617)] text-[var(--foreground)]">
+    <div className="min-h-screen overflow-x-clip text-[var(--foreground)]">
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-4 px-3 py-3 sm:px-4 md:flex-row md:gap-6 md:px-6 md:py-4">
         <div className="sticky top-3 z-40 md:hidden">
-          <div className="rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,8,23,0.96))] px-4 py-4 shadow-[0_24px_80px_rgba(2,6,23,0.45)] backdrop-blur-xl">
+          <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(12,23,35,0.94),rgba(6,14,24,0.98))] px-4 py-4 shadow-[0_24px_72px_rgba(2,6,23,0.36)] backdrop-blur-xl">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
                 <Badge variant="outline" className="w-fit text-cyan-100">
-                  Ethereum Forensics
+                  Forensic Listener
                 </Badge>
                 <div>
                   <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-cyan-200/80">
-                    Mobile Workspace
+                    Ethereum investigation workspace
                   </p>
                   <h1 className="mt-1 text-xl font-semibold tracking-tight text-white">
-                    Signal over clutter.
+                    Analyst workspace
                   </h1>
                 </div>
               </div>
@@ -161,7 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {mobileNavOpen ? (
           <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm md:hidden">
-            <div className="absolute inset-y-0 right-0 w-full max-w-sm border-l border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,8,23,0.98))] p-5 shadow-[0_28px_120px_rgba(2,6,23,0.6)]">
+            <div className="absolute inset-y-0 right-0 w-full max-w-sm border-l border-white/10 bg-[linear-gradient(180deg,rgba(12,23,35,0.97),rgba(6,14,24,0.99))] p-5 shadow-[0_28px_120px_rgba(2,6,23,0.5)]">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan-200/78">
@@ -181,77 +180,72 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
               <div className="mt-6">{renderNav("mobile")}</div>
-              <div className="mt-6 rounded-[24px] border border-white/8 bg-black/20 p-4 text-sm text-slate-300/78">
-                Use the jump bar from any page header to pivot directly into an
-                address dossier or flow trace.
+              <div className="mt-6 rounded-[22px] border border-white/8 bg-black/20 p-4 text-sm text-slate-300/78">
+                Use the jump bar to open an address dossier or trace route from
+                any page.
               </div>
             </div>
           </div>
         ) : null}
 
         <aside className="hidden md:sticky md:top-4 md:block md:h-[calc(100vh-2rem)] md:w-[310px] md:flex-shrink-0">
-          <div className="flex h-full flex-col overflow-hidden rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(2,8,23,0.96))] p-6 shadow-[0_28px_120px_rgba(2,6,23,0.45)]">
+          <div className="flex h-full flex-col overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(12,23,35,0.9),rgba(6,14,24,0.98))] p-6 shadow-[0_28px_96px_rgba(2,6,23,0.36)]">
             <div className="space-y-4">
               <Badge variant="outline" className="w-fit text-cyan-100">
-                Ethereum Forensics
+                Forensic Listener
               </Badge>
               <div>
                 <p className="font-mono text-xs uppercase tracking-[0.26em] text-cyan-200/80">
-                  Investigation Surface
+                  Ethereum investigation workspace
                 </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
-                  Signal over clutter.
+                <h1 className="mt-2 text-[2rem] font-semibold tracking-tight text-white">
+                  Analyst console
                 </h1>
                 <p className="mt-3 max-w-sm text-sm leading-6 text-slate-300/80">
-                  Split the workflow into clear investigative routes instead of
-                  forcing graph, account, alerts, and contracts into one
-                  overstuffed board.
+                  Review activity, trace funds, inspect entities, and preserve
+                  investigations in a single workspace.
                 </p>
               </div>
             </div>
 
             {renderNav("desktop")}
 
-            <div className="mt-auto rounded-[28px] border border-white/8 bg-black/20 p-5">
+            <div className="mt-auto rounded-[24px] border border-white/8 bg-black/20 p-5">
               <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-100">
+                <div className="flex size-11 items-center justify-center rounded-2xl bg-cyan-500/12 text-cyan-100">
                   <SquareTerminal className="size-5" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">
-                    Backend remains the engine
+                    Data stack
                   </p>
                   <p className="text-sm text-slate-300/75">
                     Go API + Postgres + Neo4j + pgvector.
                   </p>
                 </div>
               </div>
-              <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                <AlertTriangle className="mt-0.5 size-4 flex-shrink-0" />
-                <p>
-                  For internet access, expose the Next app and proxy API
-                  traffic. Keep Neo4j, Postgres, and the Ethereum node private.
-                </p>
+              <div className="mt-4 rounded-2xl border border-white/8 bg-slate-950/55 px-4 py-3 text-sm text-slate-300/78">
+                Live Ethereum ingestion with a small curated entity reference
+                layer for better labeling and triage.
               </div>
             </div>
           </div>
         </aside>
 
         <div className="min-w-0 w-full flex-1 overflow-x-clip">
-          <header className="mb-4 flex flex-col gap-4 overflow-hidden rounded-[28px] border border-white/8 bg-white/[0.04] px-4 py-4 backdrop-blur-xl sm:px-5 sm:py-5 md:mb-6 md:rounded-[32px] md:px-6 md:flex-row md:items-center md:justify-between">
+          <header className="mb-4 flex flex-col gap-4 overflow-hidden rounded-[24px] border border-white/8 bg-slate-950/35 px-4 py-4 backdrop-blur-xl sm:px-5 sm:py-5 md:mb-6 md:px-6 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-cyan-200/80">
                 <Activity className="size-4" />
-                Routed Investigator Workspace
+                Investigator workspace
               </div>
               <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                Focus each forensic task on its own surface.
+                Review, trace, and document suspicious activity.
               </h2>
-              <p className="max-w-3xl text-sm leading-6 text-slate-300/78">
-                Overview monitors the system, Flow Canvas traces assets,
-                Accounts hold dossiers, Cases preserve investigations,
-                Contracts hold code intelligence, and Alerts keep the spikes
-                visible.
+              <p className="max-w-3xl text-sm leading-6 text-slate-300/76">
+                Use overview for system context, alerts for triage, graph for
+                tracing, accounts for dossiers, and cases for preserved
+                investigations.
               </p>
               <div className="hidden pt-2 md:block">
                 <LiveIndicator />

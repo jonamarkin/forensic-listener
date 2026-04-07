@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
-
 export function PageHeading({
   eyebrow,
   title,
@@ -14,16 +12,16 @@ export function PageHeading({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex max-w-full flex-col gap-5 overflow-hidden rounded-[28px] border border-white/8 bg-white/[0.03] px-4 py-5 sm:px-5 sm:py-6 md:flex-row md:items-end md:justify-between md:rounded-[32px] md:px-6">
+    <div className="flex max-w-full flex-col gap-5 overflow-hidden rounded-[24px] border border-white/8 bg-slate-950/30 px-4 py-5 sm:px-5 sm:py-6 md:flex-row md:items-end md:justify-between md:px-6">
       <div className="min-w-0 max-w-3xl space-y-3">
-        <Badge variant="outline" className="w-fit text-cyan-100">
+        <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-cyan-200/72">
           {eyebrow}
-        </Badge>
+        </p>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl md:text-4xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             {title}
           </h1>
-          <p className="mt-3 text-sm leading-7 text-slate-300/82 md:text-base">
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300/78 md:text-[15px]">
             {description}
           </p>
         </div>

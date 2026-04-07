@@ -22,7 +22,7 @@ import {
 } from "@/lib/utils";
 
 const selectClassName =
-  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/80 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/40";
+  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/70 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15";
 
 type CaseDetailSurfaceProps = {
   initialCase: InvestigationCaseDetail;
