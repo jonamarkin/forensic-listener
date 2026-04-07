@@ -1,260 +1,184 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity,
+  Bell,
   BriefcaseBusiness,
+  ChevronDown,
+  CircleHelp,
   Compass,
   FileCode2,
-  Menu,
   Network,
+  Settings,
   ShieldAlert,
-  SquareTerminal,
-  X,
+  UserRound,
 } from "lucide-react";
 
 import { AddressJump } from "@/components/dashboard/address-jump";
-import { LiveIndicator } from "@/components/dashboard/live-indicator";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const navGroups = [
   {
-    href: "/overview",
-    label: "Overview",
-    description: "System health and recent activity.",
-    icon: Compass,
+    label: "General",
+    items: [
+      { href: "/overview", label: "Overview", icon: Compass },
+      { href: "/alerts", label: "Alerts", icon: ShieldAlert },
+      { href: "/cases", label: "Cases", icon: BriefcaseBusiness },
+    ],
   },
   {
-    href: "/graph",
-    label: "Graph",
-    description: "Tracing, hubs, and path expansion.",
-    icon: Network,
+    label: "Tools",
+    items: [
+      { href: "/graph", label: "Graph", icon: Network },
+      { href: "/contracts", label: "Contracts", icon: FileCode2 },
+    ],
   },
-  {
-    href: "/alerts",
-    label: "Alerts",
-    description: "Flags, spikes, and triage.",
-    icon: ShieldAlert,
-  },
-  {
-    href: "/cases",
-    label: "Cases",
-    description: "Saved investigations and evidence.",
-    icon: BriefcaseBusiness,
-  },
-  {
-    href: "/contracts",
-    label: "Contracts",
-    description: "Code intelligence and similarity.",
-    icon: FileCode2,
-  },
+];
+
+const footerItems = [
+  { label: "Help Center", icon: CircleHelp },
+  { label: "Setting", icon: Settings },
+  { label: "Profile", icon: UserRound },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [pathname]);
-
-  const renderNav = (mode: "desktop" | "mobile") => (
-    <nav className={cn(mode === "desktop" ? "mt-8 space-y-2" : "space-y-2")}>
-      {navItems.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const Icon = item.icon;
-
-        return (
-          <Link
-            key={`${mode}:${item.href}`}
-            href={item.href}
-            className={cn(
-              "group flex items-start gap-4 rounded-[22px] border px-4 py-4 transition-all",
-              active
-                ? "border-[#b8d6ad] bg-[#e7f1dd] shadow-[0_10px_30px_rgba(18,41,23,0.08)]"
-                : "border-transparent bg-transparent hover:border-[#dbe3d8] hover:bg-white/70",
-            )}
-          >
-            <span
-              className={cn(
-                "mt-0.5 flex size-10 items-center justify-center rounded-2xl border",
-                active
-                  ? "border-[#bdd5b5] bg-[#f3f7ee] text-[#2a6530]"
-                  : "border-[#dbe3d8] bg-white/80 text-[#607063] group-hover:text-[#17301d]",
-              )}
-            >
-              <Icon className="size-5" />
-            </span>
-            <span className="space-y-1">
-              <span className="block text-sm font-semibold text-[#132118]">
-                {item.label}
-              </span>
-              <span className="block text-sm leading-5 text-[#607063]">
-                {item.description}
-              </span>
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  function isActive(href: string) {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
 
   return (
-    <div className="min-h-screen overflow-x-clip text-[var(--foreground)]">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-4 px-3 py-3 sm:px-4 md:flex-row md:gap-6 md:px-6 md:py-4">
-        <div className="sticky top-3 z-40 md:hidden">
-          <div className="rounded-[28px] border border-[color:var(--border)] bg-[linear-gradient(180deg,rgba(251,252,248,0.94),rgba(240,244,234,0.98))] px-4 py-4 shadow-[0_20px_56px_rgba(18,41,23,0.08)] backdrop-blur-xl">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <Badge variant="outline" className="w-fit">
-                  Forensic Listener
-                </Badge>
-                <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#6b7a6d]">
-                    Ethereum investigation workspace
-                  </p>
-                  <h1 className="mt-1 text-xl font-semibold tracking-tight text-[#132118]">
-                    Analyst workspace
-                  </h1>
-                </div>
+    <div className="min-h-screen text-[#132118]">
+      <div className="mx-auto flex min-h-screen max-w-[1440px] gap-4 px-3 py-4 sm:px-5 sm:py-6 lg:gap-5 lg:px-8 lg:py-10">
+        <aside className="hidden w-[208px] shrink-0 flex-col rounded-[28px] border border-[#e8ebe4] bg-[linear-gradient(180deg,#f5f6f2_0%,#f1f3ee_100%)] p-4 shadow-[0_28px_80px_rgba(28,41,26,0.08)] md:flex">
+          <div className="flex items-center justify-between gap-3 px-2 pb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-7 items-center justify-center rounded-lg bg-[linear-gradient(180deg,#2a6a31_0%,#163e1a_100%)] text-[11px] font-semibold text-white">
+                F
               </div>
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen((current) => !current)}
-                className="inline-flex size-11 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white/85 text-[#17301d] transition hover:bg-white"
-                aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-                aria-expanded={mobileNavOpen}
-              >
-                {mobileNavOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-              </button>
+              <div className="text-sm font-semibold text-[#1c281d]">Forensic</div>
             </div>
-            <div className="mt-4">
-              <LiveIndicator />
-            </div>
-            <div className="mt-4 overflow-x-auto pb-1">
-              <div className="flex min-w-max gap-2">
-                {navItems.map((item) => {
-                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                  return (
-                    <Link
-                      key={`mobile-chip:${item.href}`}
-                      href={item.href}
-                      className={cn(
-                        "rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap transition",
-                        active
-                          ? "border-[#b8d6ad] bg-[#e7f1dd] text-[#1f5d26]"
-                          : "border-[#dbe3d8] bg-white/75 text-[#576559]",
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
+            <div className="flex size-6 items-center justify-center rounded-md border border-[#e0e5dc] bg-white text-[#8f9990]">
+              <div className="size-2 rounded-[3px] border border-current" />
             </div>
           </div>
-        </div>
 
-        {mobileNavOpen ? (
-          <div className="fixed inset-0 z-50 bg-[#132118]/20 backdrop-blur-sm md:hidden">
-            <div className="absolute inset-y-0 right-0 w-full max-w-sm border-l border-[color:var(--border)] bg-[linear-gradient(180deg,rgba(251,252,248,0.98),rgba(239,244,232,0.99))] p-5 shadow-[0_28px_96px_rgba(18,41,23,0.12)]">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#6b7a6d]">
-                    Navigation
-                  </p>
-                  <p className="mt-1 text-lg font-semibold text-[#132118]">
-                    Main routes
-                  </p>
+          <div className="space-y-6 pt-2">
+            {navGroups.map((group) => (
+              <div key={group.label} className="space-y-2">
+                <div className="px-2 text-[11px] font-medium text-[#96a095]">
+                  {group.label}
                 </div>
+                <div className="space-y-1">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const active = isActive(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition",
+                          active
+                            ? "bg-white text-[#1b2d1e] shadow-[0_10px_24px_rgba(24,40,26,0.06)]"
+                            : "text-[#4d5b50] hover:bg-white/78 hover:text-[#1b2d1e]",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "flex size-6 items-center justify-center rounded-lg",
+                            active ? "text-[#2b6631]" : "text-[#6b776d]",
+                          )}
+                        >
+                          <Icon className="size-4" />
+                        </span>
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-auto space-y-1 pt-8">
+            {footerItems.map((item) => {
+              const Icon = item.icon;
+              return (
                 <button
+                  key={item.label}
                   type="button"
-                  onClick={() => setMobileNavOpen(false)}
-                  className="inline-flex size-10 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white/85 text-[#17301d]"
-                  aria-label="Close navigation"
+                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm text-[#5b685d] transition hover:bg-white/78 hover:text-[#1b2d1e]"
                 >
-                  <X className="size-5" />
+                  <span className="flex size-6 items-center justify-center rounded-lg text-[#6b776d]">
+                    <Icon className="size-4" />
+                  </span>
+                  <span>{item.label}</span>
                 </button>
-              </div>
-              <div className="mt-6">{renderNav("mobile")}</div>
-              <div className="mt-6 rounded-[22px] border border-[color:var(--border)] bg-white/72 p-4 text-sm text-[#5d6a60]">
-                Use the jump bar to open an address dossier or trace route from
-                any page.
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <aside className="hidden md:sticky md:top-4 md:block md:h-[calc(100vh-2rem)] md:w-[310px] md:flex-shrink-0">
-          <div className="flex h-full flex-col overflow-hidden rounded-[32px] border border-[color:var(--border)] bg-[linear-gradient(180deg,rgba(231,238,222,0.95),rgba(244,247,239,0.98))] p-6 shadow-[0_24px_72px_rgba(18,41,23,0.08)]">
-            <div className="space-y-4">
-              <Badge variant="outline" className="w-fit">
-                Forensic Listener
-              </Badge>
-              <div>
-                <p className="font-mono text-xs uppercase tracking-[0.26em] text-[#6b7a6d]">
-                  Ethereum investigation workspace
-                </p>
-                <h1 className="mt-2 text-[2.2rem] font-semibold tracking-tight text-[#132118]">
-                  Investigation studio
-                </h1>
-                <p className="mt-3 max-w-sm text-sm leading-6 text-[#5d6a60]">
-                  Review activity, trace funds, inspect entities, and preserve
-                  investigations in a single workspace.
-                </p>
-              </div>
-            </div>
-
-            {renderNav("desktop")}
-
-            <div className="mt-auto rounded-[28px] border border-[#dbe3d8] bg-white/78 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-[#edf4e8] text-[#2a6530]">
-                  <SquareTerminal className="size-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[#132118]">
-                    Data stack
-                  </p>
-                  <p className="text-sm text-[#5d6a60]">
-                    Go API + Postgres + Neo4j + pgvector.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 rounded-2xl border border-[#dbe3d8] bg-[#f4f7ef] px-4 py-3 text-sm text-[#5d6a60]">
-                Live Ethereum ingestion with a small curated entity reference
-                layer for better labeling and triage.
-              </div>
-            </div>
+              );
+            })}
           </div>
         </aside>
 
-        <div className="min-w-0 w-full flex-1 overflow-x-clip">
-          <header className="mb-4 flex flex-col gap-4 overflow-hidden rounded-[30px] border border-[color:var(--border)] bg-white/80 px-5 py-5 backdrop-blur-xl sm:px-6 md:mb-6 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[#6b7a6d]">
-                <Activity className="size-4" />
-                Investigator workspace
+        <div className="flex min-w-0 flex-1 flex-col rounded-[30px] border border-[#e8ebe4] bg-[linear-gradient(180deg,rgba(252,252,249,0.98),rgba(248,249,245,0.96))] px-4 py-4 shadow-[0_28px_80px_rgba(28,41,26,0.08)] sm:px-5 lg:px-6">
+          <header className="flex flex-col gap-3 border-b border-[#edf0e9] pb-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 items-center justify-center rounded-2xl border border-[#e4e8e0] bg-[#f5f6f2] text-[#6c776d] md:hidden">
+                <Compass className="size-4" />
               </div>
-              <h2 className="text-xl font-semibold tracking-tight text-[#132118] sm:text-2xl">
-                Review, trace, and document suspicious activity.
-              </h2>
-              <p className="max-w-3xl text-sm leading-6 text-[#5d6a60]">
-                Use overview for system context, alerts for triage, graph for
-                tracing, accounts for dossiers, and cases for preserved
-                investigations.
-              </p>
-              <div className="hidden pt-2 md:block">
-                <LiveIndicator />
+              <AddressJump />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 sm:justify-end">
+              <div className="hidden items-center gap-2 rounded-2xl border border-[#e6e9e2] bg-[#f7f8f4] px-3 py-2 text-xs font-medium text-[#607063] sm:flex">
+                <span className="size-2 rounded-full bg-[#28b04e]" />
+                Live node
+              </div>
+
+              <button
+                type="button"
+                className="flex size-11 items-center justify-center rounded-2xl border border-[#e6e9e2] bg-[#f7f8f4] text-[#607063] transition hover:bg-white"
+                aria-label="Notifications"
+              >
+                <Bell className="size-4" />
+              </button>
+
+              <div className="flex items-center gap-2 rounded-2xl border border-[#e6e9e2] bg-[#f7f8f4] px-2.5 py-2">
+                <div className="flex size-8 items-center justify-center rounded-full bg-[linear-gradient(180deg,#f1c8b6_0%,#e9a27e_100%)] text-[11px] font-semibold text-[#5a2d16]">
+                  FL
+                </div>
+                <div className="hidden pr-1 sm:block">
+                  <div className="text-xs font-medium text-[#1f2b20]">Forensic Lab</div>
+                  <div className="text-[11px] text-[#819083]">Analyst workspace</div>
+                </div>
+                <ChevronDown className="size-4 text-[#7d897f]" />
               </div>
             </div>
-            <AddressJump />
           </header>
 
-          <main>{children}</main>
+          <div className="mb-4 mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden">
+            {navGroups.flatMap((group) => group.items).map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition",
+                    active
+                      ? "border-[#b8d6ad] bg-[#e7f1dd] text-[#1f5d26]"
+                      : "border-[#dbe3d8] bg-white text-[#5b685d]",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+
+          <main className="min-w-0 flex-1">{children}</main>
         </div>
       </div>
     </div>

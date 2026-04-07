@@ -2,64 +2,60 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRightLeft, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function AddressJump() {
   const router = useRouter();
-  const [address, setAddress] = useState("");
+  const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  function goTo(path: "account" | "graph") {
-    const trimmed = address.trim();
+  function resolveTarget(trimmed: string) {
+    if (/^\d+$/.test(trimmed)) {
+      return `/cases/${encodeURIComponent(trimmed)}`;
+    }
+
+    if (/^0x[a-fA-F0-9]{64}$/.test(trimmed)) {
+      return `/transactions/${encodeURIComponent(trimmed)}`;
+    }
+
+    if (/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+      return `/accounts/${encodeURIComponent(trimmed)}`;
+    }
+
+    return `/accounts/${encodeURIComponent(trimmed)}`;
+  }
+
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = query.trim();
     if (!trimmed) {
       return;
     }
 
     startTransition(() => {
-      if (path === "account") {
-        router.push(`/accounts/${encodeURIComponent(trimmed)}`);
-        return;
-      }
-      router.push(`/graph?address=${encodeURIComponent(trimmed)}&depth=2`);
+      router.push(resolveTarget(trimmed));
     });
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2 rounded-[24px] border border-[color:var(--border)] bg-white/80 p-3 sm:rounded-[26px] md:max-w-[440px] md:min-w-[340px] md:flex-row md:items-center">
+    <form
+      className="flex h-12 w-full min-w-0 items-center gap-3 rounded-2xl border border-[#ecefe8] bg-[#f5f6f2] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] md:max-w-[360px]"
+      onSubmit={onSubmit}
+    >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <Search className="size-4 text-[#6b7c6e]" />
         <Input
-          value={address}
-          onChange={(event) => setAddress(event.target.value)}
-          placeholder="Search an address or contract"
-          className="h-10 border-none bg-transparent px-0 text-[#132118] shadow-none focus:ring-0"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search address, tx hash, or case"
+          className="h-10 border-none bg-transparent px-0 text-[#132118] shadow-none placeholder:text-[#98a39a] focus:ring-0"
         />
       </div>
-      <div className="flex min-w-0 gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => goTo("account")}
-          disabled={isPending}
-          className="flex-1 md:flex-none"
-        >
-          Account
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => goTo("graph")}
-          disabled={isPending}
-          className="flex-1 md:flex-none"
-        >
-          Trace
-          <ArrowRightLeft className="size-4" />
-        </Button>
+      <div className="rounded-xl border border-[#e5e8e0] bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8a948b]">
+        {isPending ? "..." : "Enter"}
       </div>
-    </div>
+    </form>
   );
 }
