@@ -182,44 +182,44 @@ export function OverviewLiveSurface({
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-white">Network velocity</CardTitle>
+                <CardTitle className="text-[#132118]">Network activity</CardTitle>
                 <CardDescription>
                   Twenty-four hour throughput and recent network context.
                 </CardDescription>
               </div>
-              <div className="rounded-2xl border border-cyan-300/18 bg-cyan-400/8 px-4 py-3 text-right">
-                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan-200/80">
+              <div className="rounded-2xl border border-[#dbe3d8] bg-[#edf4e8] px-4 py-3 text-right">
+                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#6b7a6d]">
                   Latest hour
                 </div>
-                <div className="mt-1 text-lg font-semibold text-white">
+                <div className="mt-1 text-lg font-semibold text-[#132118]">
                   {formatCount(latestNetworkPoint?.transaction_count ?? 0)} tx
                 </div>
-                <div className="text-sm text-slate-300/80">
+                <div className="text-sm text-[#5d6a60]">
                   {formatWeiToGwei(latestNetworkPoint?.avg_gas_price ?? "0")} avg gas
                 </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="h-[230px] rounded-[24px] border border-white/6 bg-black/20 p-4">
+            <div className="h-[230px] rounded-[24px] border border-[#dbe3d8] bg-[#f4f7ef] p-4">
               <LineChart values={networkValues} />
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               {networkMetrics.slice(-3).map((point) => (
                 <div
                   key={point.bucket}
-                  className="rounded-[22px] border border-white/8 bg-black/20 p-4"
+                  className="rounded-[22px] border border-[#dbe3d8] bg-white/78 p-4"
                 >
-                  <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#6b7a6d]">
                     {formatDateTime(point.bucket)}
                   </div>
-                  <div className="mt-2 text-xl font-semibold text-white">
+                  <div className="mt-2 text-xl font-semibold text-[#132118]">
                     {formatCount(point.transaction_count)} tx
                   </div>
-                  <div className="mt-1 text-sm text-slate-300/78">
+                  <div className="mt-1 text-sm text-[#5d6a60]">
                     {formatCount(point.unique_addresses)} unique addresses
                   </div>
-                  <div className="mt-1 text-sm text-slate-300/78">
+                  <div className="mt-1 text-sm text-[#5d6a60]">
                     {formatWeiToEth(point.total_value)} moved
                   </div>
                 </div>
@@ -230,7 +230,7 @@ export function OverviewLiveSurface({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-white">Enrichment posture</CardTitle>
+            <CardTitle className="text-[#132118]">Enrichment posture</CardTitle>
             <CardDescription>
               Queue pressure, retries, and the oldest unprocessed work.
             </CardDescription>
@@ -244,10 +244,10 @@ export function OverviewLiveSurface({
             ].map((item) => (
               <div key={item.label} className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-200">{item.label}</span>
-                  <span className="font-semibold text-white">{formatCount(item.value)}</span>
+                  <span className="text-[#334236]">{item.label}</span>
+                  <span className="font-semibold text-[#132118]">{formatCount(item.value)}</span>
                 </div>
-                <div className="h-2.5 rounded-full bg-white/6">
+                <div className="h-2.5 rounded-full bg-[#e8eee3]">
                   <div
                     className={`h-2.5 rounded-full ${item.color}`}
                     style={{
@@ -271,14 +271,14 @@ export function OverviewLiveSurface({
 
             <Separator />
 
-            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">
+            <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f4f7ef] p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#6b7a6d]">
                 Oldest pending item
               </p>
-              <p className="mt-2 text-base font-medium text-white">
+              <p className="mt-2 text-base font-medium text-[#132118]">
                 {formatDateTime(enrichment?.oldest_pending_at)}
               </p>
-              <p className="mt-2 text-sm text-slate-300/76">
+              <p className="mt-2 text-sm text-[#5d6a60]">
                 Use this to judge whether the pipeline is keeping pace with
                 enrichment demand.
               </p>
@@ -290,7 +290,7 @@ export function OverviewLiveSurface({
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <Card className="w-full">
           <CardHeader>
-            <CardTitle className="text-white">High-activity addresses</CardTitle>
+            <CardTitle className="text-[#132118]">High-activity addresses</CardTitle>
             <CardDescription>
               Fast pivots into the most active wallets and contracts.
             </CardDescription>
@@ -300,23 +300,23 @@ export function OverviewLiveSurface({
               <Link
                 key={address.address}
                 href={`/accounts/${encodeURIComponent(address.address)}`}
-                className="block w-full min-w-0 max-w-full rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                className="block w-full min-w-0 max-w-full rounded-[24px] border border-[#dbe3d8] bg-white/78 p-4 transition hover:border-[#b8d6ad] hover:bg-[#eef5e9]"
               >
                 <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {formatAddress(address.address, 8)}
                     </div>
-                    <div className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-slate-300/75">
+                    <div className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-[#5d6a60]">
                       {address.is_contract ? "Contract" : "Wallet"} · last seen{" "}
                       {formatDateTime(address.last_seen)}
                     </div>
                   </div>
                   <div className="text-left sm:flex-shrink-0 sm:text-right">
-                    <div className="text-lg font-semibold text-white">
+                    <div className="text-lg font-semibold text-[#132118]">
                       {formatCount(address.total_count)}
                     </div>
-                    <div className="text-sm text-slate-300/75">total tx</div>
+                    <div className="text-sm text-[#5d6a60]">total tx</div>
                   </div>
                 </div>
               </Link>
@@ -326,7 +326,7 @@ export function OverviewLiveSurface({
 
         <Card className="w-full">
           <CardHeader>
-            <CardTitle className="text-white">Recent forensic flags</CardTitle>
+            <CardTitle className="text-[#132118]">Recent forensic flags</CardTitle>
             <CardDescription>
               Newly raised anomalies ready for review.
             </CardDescription>
@@ -339,10 +339,10 @@ export function OverviewLiveSurface({
               >
                 <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {flag.flag_type.replace(/_/g, " ")}
                     </div>
-                    <div className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-slate-100/85">
+                    <div className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-[#5d6a60]">
                       {flag.description}
                     </div>
                   </div>
@@ -359,7 +359,7 @@ export function OverviewLiveSurface({
                     {flag.severity}
                   </Badge>
                 </div>
-                <div className="mt-3 break-words [overflow-wrap:anywhere] text-xs text-slate-200/80">
+                <div className="mt-3 break-words [overflow-wrap:anywhere] text-xs text-[#69766b]">
                   {formatDateTime(flag.detected_at)} · {formatAddress(flag.address)}
                 </div>
               </div>
@@ -371,7 +371,7 @@ export function OverviewLiveSurface({
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <Card className="w-full">
           <CardHeader>
-            <CardTitle className="text-white">Latest transactions</CardTitle>
+            <CardTitle className="text-[#132118]">Latest transactions</CardTitle>
             <CardDescription>
               Recent ledger activity for manual inspection and quick pivots.
             </CardDescription>
@@ -380,23 +380,23 @@ export function OverviewLiveSurface({
             {recentTransactions.map((tx) => (
               <div
                 key={tx.hash}
-                className="w-full min-w-0 max-w-full rounded-[24px] border border-white/8 bg-black/20 p-4"
+                className="w-full min-w-0 max-w-full rounded-[24px] border border-[#dbe3d8] bg-white/78 p-4"
               >
                 <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <div className="truncate font-mono text-xs text-cyan-100">
+                    <div className="truncate font-mono text-xs text-[#55725c]">
                       {formatAddress(tx.hash, 10)}
                     </div>
-                    <div className="mt-2 break-words [overflow-wrap:anywhere] text-sm text-slate-300/80">
+                    <div className="mt-2 break-words [overflow-wrap:anywhere] text-sm text-[#5d6a60]">
                       <Link
-                        className="font-semibold text-white transition hover:text-cyan-100"
+                        className="font-semibold text-[#132118] transition hover:text-[#1f5d26]"
                         href={`/accounts/${encodeURIComponent(tx.from)}`}
                       >
                         {formatAddress(tx.from)}
                       </Link>
                       {" → "}
                       <Link
-                        className="font-semibold text-white transition hover:text-cyan-100"
+                        className="font-semibold text-[#132118] transition hover:text-[#1f5d26]"
                         href={`/accounts/${encodeURIComponent(tx.to)}`}
                       >
                         {formatAddress(tx.to || "contract creation")}
@@ -404,10 +404,10 @@ export function OverviewLiveSurface({
                     </div>
                   </div>
                   <div className="text-left sm:flex-shrink-0 sm:text-right">
-                    <div className="text-base font-semibold text-white">
+                    <div className="text-base font-semibold text-[#132118]">
                       {formatWeiToEth(tx.value)}
                     </div>
-                    <div className="text-sm text-slate-300/74">
+                    <div className="text-sm text-[#5d6a60]">
                       block {tx.block_number}
                     </div>
                   </div>
@@ -427,7 +427,7 @@ export function OverviewLiveSurface({
 
         <Card className="w-full">
           <CardHeader>
-            <CardTitle className="text-white">Recent contract intelligence</CardTitle>
+            <CardTitle className="text-[#132118]">Recent contract intelligence</CardTitle>
             <CardDescription>
               Newly observed contracts ready for similarity and code review.
             </CardDescription>
@@ -437,14 +437,14 @@ export function OverviewLiveSurface({
               <Link
                 key={contract.address}
                 href={`/contracts/${encodeURIComponent(contract.address)}`}
-                className="block w-full min-w-0 max-w-full rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                className="block w-full min-w-0 max-w-full rounded-[24px] border border-[#dbe3d8] bg-white/78 p-4 transition hover:border-[#b8d6ad] hover:bg-[#eef5e9]"
               >
                 <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {formatAddress(contract.address, 8)}
                     </div>
-                    <div className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-slate-300/78">
+                    <div className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-[#5d6a60]">
                       Bytecode size {formatCount(contract.bytecode_size)}
                     </div>
                   </div>

@@ -108,68 +108,68 @@ export function riskLabel(level: string | null | undefined) {
 export function riskTone(level: string | null | undefined) {
   switch (riskLabel(level)) {
     case "high":
-      return "bg-rose-500/15 text-rose-200 border-rose-400/35";
+      return "bg-[#f6d6d2] text-[#8f342b] border-[#e8b2ab]";
     case "medium":
-      return "bg-amber-500/15 text-amber-100 border-amber-400/35";
+      return "bg-[#f4ead0] text-[#8a6732] border-[#e6d3a2]";
     case "low":
-      return "bg-emerald-500/15 text-emerald-100 border-emerald-400/35";
+      return "bg-[#e0edd8] text-[#2b6631] border-[#bed7b6]";
     default:
-      return "bg-slate-500/15 text-slate-200 border-slate-400/25";
+      return "bg-[#eef1ea] text-[#4d5a50] border-[#dbe3d8]";
   }
 }
 
 export function entityTone(entityType: string | null | undefined) {
   switch ((entityType || "").toLowerCase()) {
     case "exchange":
-      return "bg-cyan-500/15 text-cyan-100 border-cyan-400/30";
+      return "bg-[#dceff0] text-[#1f6171] border-[#b8dfe1]";
     case "stablecoin":
-      return "bg-violet-500/15 text-violet-100 border-violet-400/30";
+      return "bg-[#ebe4f6] text-[#5d4c81] border-[#d7c5eb]";
     case "mixer":
-      return "bg-rose-500/15 text-rose-100 border-rose-400/30";
+      return "bg-[#f5d9d7] text-[#933f34] border-[#e9b8b3]";
     case "contract":
-      return "bg-indigo-500/15 text-indigo-100 border-indigo-400/30";
+      return "bg-[#e4e8f5] text-[#46537d] border-[#cad3ed]";
     default:
-      return "bg-slate-500/15 text-slate-100 border-slate-400/20";
+      return "bg-[#eef1ea] text-[#4d5a50] border-[#dbe3d8]";
   }
 }
 
 export function caseStatusTone(status: string | null | undefined) {
   switch ((status || "").toLowerCase()) {
     case "monitoring":
-      return "bg-cyan-500/15 text-cyan-100 border-cyan-400/30";
+      return "bg-[#dceff0] text-[#1f6171] border-[#b8dfe1]";
     case "escalated":
-      return "bg-rose-500/15 text-rose-100 border-rose-400/30";
+      return "bg-[#f5d9d7] text-[#933f34] border-[#e9b8b3]";
     case "closed":
-      return "bg-emerald-500/15 text-emerald-100 border-emerald-400/30";
+      return "bg-[#e0edd8] text-[#2b6631] border-[#bed7b6]";
     default:
-      return "bg-amber-500/15 text-amber-100 border-amber-400/30";
+      return "bg-[#f4ead0] text-[#8a6732] border-[#e6d3a2]";
   }
 }
 
 export function priorityTone(priority: string | null | undefined) {
   switch ((priority || "").toLowerCase()) {
     case "critical":
-      return "bg-rose-500/15 text-rose-100 border-rose-400/30";
+      return "bg-[#f5d9d7] text-[#933f34] border-[#e9b8b3]";
     case "high":
-      return "bg-amber-500/15 text-amber-100 border-amber-400/30";
+      return "bg-[#f4ead0] text-[#8a6732] border-[#e6d3a2]";
     case "low":
-      return "bg-emerald-500/15 text-emerald-100 border-emerald-400/30";
+      return "bg-[#e0edd8] text-[#2b6631] border-[#bed7b6]";
     default:
-      return "bg-cyan-500/15 text-cyan-100 border-cyan-400/30";
+      return "bg-[#dceff0] text-[#1f6171] border-[#b8dfe1]";
   }
 }
 
 export function triageTone(status: string | null | undefined) {
   switch ((status || "").toLowerCase()) {
     case "escalated":
-      return "bg-rose-500/15 text-rose-100 border-rose-400/30";
+      return "bg-[#f5d9d7] text-[#933f34] border-[#e9b8b3]";
     case "dismissed":
-      return "bg-slate-500/15 text-slate-100 border-slate-400/25";
+      return "bg-[#eef1ea] text-[#4d5a50] border-[#dbe3d8]";
     case "resolved":
-      return "bg-emerald-500/15 text-emerald-100 border-emerald-400/30";
+      return "bg-[#e0edd8] text-[#2b6631] border-[#bed7b6]";
     case "reviewing":
-      return "bg-cyan-500/15 text-cyan-100 border-cyan-400/30";
+      return "bg-[#dceff0] text-[#1f6171] border-[#b8dfe1]";
     default:
-      return "bg-amber-500/15 text-amber-100 border-amber-400/30";
+      return "bg-[#f4ead0] text-[#8a6732] border-[#e6d3a2]";
   }
 }

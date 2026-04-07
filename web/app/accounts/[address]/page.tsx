@@ -108,35 +108,35 @@ export default async function AccountPage({
               {profile.is_hub ? <Badge variant="outline">hub</Badge> : null}
             </div>
             <div className="grid gap-4 md:grid-cols-4">
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan-200/76">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#7b887d]">
                   Balance
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
+                <div className="mt-2 text-2xl font-semibold text-[#132118]">
                   {formatWeiToEth(profile.balance)}
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan-200/76">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#7b887d]">
                   Total tx
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
+                <div className="mt-2 text-2xl font-semibold text-[#132118]">
                   {formatCount(profile.total_count)}
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan-200/76">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#7b887d]">
                   Sent
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
+                <div className="mt-2 text-2xl font-semibold text-[#132118]">
                   {formatWeiToEth(profile.total_sent)}
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan-200/76">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#7b887d]">
                   Received
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
+                <div className="mt-2 text-2xl font-semibold text-[#132118]">
                   {formatWeiToEth(profile.total_received)}
                 </div>
               </div>
@@ -144,18 +144,18 @@ export default async function AccountPage({
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="text-sm font-semibold text-white">Lifecycle</div>
-                <div className="mt-3 space-y-2 text-sm text-slate-300/78">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4">
+                <div className="text-sm font-semibold text-[#132118]">Lifecycle</div>
+                <div className="mt-3 space-y-2 text-sm text-[#556357]">
                   <div>First seen: {formatDateTime(profile.first_seen)}</div>
                   <div>Last seen: {formatDateTime(profile.last_seen)}</div>
                   <div>Sent count: {formatCount(profile.sent_count)}</div>
                   <div>Received count: {formatCount(profile.received_count)}</div>
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="text-sm font-semibold text-white">Risk posture</div>
-                <div className="mt-3 space-y-2 text-sm text-slate-300/78">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4">
+                <div className="text-sm font-semibold text-[#132118]">Risk posture</div>
+                <div className="mt-3 space-y-2 text-sm text-[#556357]">
                   <div>Flags: {formatCount(profile.flag_count)}</div>
                   <div>
                     High-severity flags: {formatCount(profile.high_severity_flag_count)}
@@ -166,9 +166,9 @@ export default async function AccountPage({
               </div>
             </div>
 
-            <Card className="border-white/6 bg-black/20 shadow-none">
+            <Card className="border-[#dbe3d8] bg-[#fdfefb] shadow-none">
               <CardHeader>
-                <CardTitle className="text-white">Counterparties</CardTitle>
+                <CardTitle className="text-[#132118]">Counterparties</CardTitle>
                 <CardDescription>
                   The addresses this entity moves with most often.
                 </CardDescription>
@@ -179,15 +179,15 @@ export default async function AccountPage({
                     <Link
                       key={counterparty.address}
                       href={`/accounts/${encodeURIComponent(counterparty.address)}`}
-                      className="block rounded-[22px] border border-white/8 bg-slate-950/70 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                      className="block rounded-[22px] border border-[#dbe3d8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <div className="text-sm font-semibold text-white">
+                          <div className="text-sm font-semibold text-[#132118]">
                             {counterparty.entity_name ||
                               formatAddress(counterparty.address, 7)}
                           </div>
-                          <div className="mt-1 text-sm text-slate-300/76">
+                          <div className="mt-1 text-sm text-[#5d6a60]">
                             {counterparty.entity_type || "wallet"} ·{" "}
                             {formatCount(counterparty.total_count)} interactions
                           </div>
@@ -199,16 +199,16 @@ export default async function AccountPage({
                     </Link>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-300/72">
+                  <p className="text-sm text-[#6f7b72]">
                     No counterparties available yet for this address.
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="border-white/6 bg-black/20 shadow-none">
+            <Card className="border-[#dbe3d8] bg-[#fdfefb] shadow-none">
               <CardHeader>
-                <CardTitle className="text-white">Recent transactions</CardTitle>
+                <CardTitle className="text-[#132118]">Recent transactions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 overflow-x-hidden">
                 {profile.recent_transactions.length ? (
@@ -216,23 +216,23 @@ export default async function AccountPage({
                     <Link
                       key={tx.hash}
                       href={`/transactions/${encodeURIComponent(tx.hash)}`}
-                      className="block w-full min-w-0 rounded-[22px] border border-white/8 bg-slate-950/70 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                      className="block w-full min-w-0 rounded-[22px] border border-[#dbe3d8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                     >
                       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
-                          <div className="font-mono text-xs text-cyan-100 [overflow-wrap:anywhere]">
+                          <div className="font-mono text-xs text-[#2b6631] [overflow-wrap:anywhere]">
                             {formatAddress(tx.hash, 10)}
                           </div>
-                          <div className="mt-2 text-sm text-slate-300/78 [overflow-wrap:anywhere]">
+                          <div className="mt-2 text-sm text-[#5d6a60] [overflow-wrap:anywhere]">
                             {formatAddress(tx.from, 7)} →{" "}
                             {tx.to ? formatAddress(tx.to, 7) : "contract creation"}
                           </div>
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
-                          <div className="text-sm font-semibold text-white">
+                          <div className="text-sm font-semibold text-[#132118]">
                             {formatWeiToEth(tx.value)}
                           </div>
-                          <div className="mt-1 text-xs text-slate-300/78">
+                          <div className="mt-1 text-xs text-[#76857a]">
                             {formatDateTime(tx.timestamp)}
                           </div>
                         </div>
@@ -240,7 +240,7 @@ export default async function AccountPage({
                     </Link>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-300/72">
+                  <p className="text-sm text-[#6f7b72]">
                     No recent transaction slice is available yet.
                   </p>
                 )}
@@ -252,9 +252,9 @@ export default async function AccountPage({
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2 text-cyan-100">
+              <div className="flex items-center gap-2 text-[#2b6631]">
                 <Brain className="size-5" />
-                <CardTitle className="text-white">Behavior matcher</CardTitle>
+                <CardTitle className="text-[#132118]">Behavior matcher</CardTitle>
               </div>
               <CardDescription>
                 Feature profile and nearest-neighbor matches from pgvector.
@@ -263,8 +263,8 @@ export default async function AccountPage({
             <CardContent className="space-y-4">
               {behavior ? (
                 <>
-                  <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                    <div className="text-sm text-slate-300/78">
+                  <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                    <div className="text-sm text-[#556357]">
                       Sample size {formatCount(behavior.sample_size)} · updated{" "}
                       {formatDateTime(behavior.updated_at)}
                     </div>
@@ -272,16 +272,16 @@ export default async function AccountPage({
                       {topFeatures.map(([name, value]) => (
                         <div key={name}>
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-slate-200">
+                            <span className="text-[#556357]">
                               {name.replace(/_/g, " ")}
                             </span>
-                            <span className="font-semibold text-white">
+                            <span className="font-semibold text-[#132118]">
                               {value.toFixed(3)}
                             </span>
                           </div>
-                          <div className="mt-2 h-2 rounded-full bg-white/6">
+                          <div className="mt-2 h-2 rounded-full bg-[#dce7d7]">
                             <div
-                              className="h-2 rounded-full bg-cyan-400"
+                              className="h-2 rounded-full bg-[#129420]"
                               style={{
                                 width: `${Math.min(100, Math.abs(value) * 100)}%`,
                               }}
@@ -297,36 +297,36 @@ export default async function AccountPage({
                         <Link
                           key={match.address}
                           href={`/accounts/${encodeURIComponent(match.address)}`}
-                          className="block rounded-[22px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                          className="block rounded-[22px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-sm font-semibold text-white">
+                              <div className="text-sm font-semibold text-[#132118]">
                                 {match.entity_name ||
                                   formatAddress(match.address, 7)}
                               </div>
-                              <div className="mt-1 text-sm text-slate-300/78">
+                              <div className="mt-1 text-sm text-[#5d6a60]">
                                 {match.highlights.join(" · ")}
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="text-lg font-semibold text-white">
+                              <div className="text-lg font-semibold text-[#132118]">
                                 {formatSimilarity(match.similarity)}
                               </div>
-                              <div className="text-xs text-slate-400">similarity</div>
+                              <div className="text-xs text-[#76857a]">similarity</div>
                             </div>
                           </div>
                         </Link>
                       ))
                     ) : (
-                      <p className="text-sm text-slate-300/72">
+                      <p className="text-sm text-[#6f7b72]">
                         No nearby behavioral neighbors available yet.
                       </p>
                     )}
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-slate-300/72">
+                <p className="text-sm text-[#6f7b72]">
                   Behavior vectors are not available for this address yet.
                 </p>
               )}
@@ -335,28 +335,28 @@ export default async function AccountPage({
 
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2 text-cyan-100">
+              <div className="flex items-center gap-2 text-[#2b6631]">
                 <Waves className="size-5" />
-                <CardTitle className="text-white">Velocity</CardTitle>
+                <CardTitle className="text-[#132118]">Velocity</CardTitle>
               </div>
               <CardDescription>
                 Time-bucketed activity for anomaly context and burst detection.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="h-[210px] rounded-[24px] border border-white/8 bg-black/20 p-4">
+              <div className="h-[210px] rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
                 <LineChart values={velocityValues} stroke="rgb(16 185 129)" fill="rgba(16, 185, 129, 0.15)" />
               </div>
               <div className="grid gap-3">
                 {(velocity || []).slice(-4).map((point) => (
                   <div
                     key={point.bucket}
-                    className="rounded-[22px] border border-white/8 bg-black/20 p-4"
+                    className="rounded-[22px] border border-[#dbe3d8] bg-white/82 p-4"
                   >
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {formatDateTime(point.bucket)}
                     </div>
-                    <div className="mt-1 text-sm text-slate-300/78">
+                    <div className="mt-1 text-sm text-[#5d6a60]">
                       {formatCount(point.total_count)} tx · {formatWeiToEth(point.total_value)}
                     </div>
                   </div>

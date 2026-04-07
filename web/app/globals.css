@@ -26,25 +26,25 @@
 }
 
 :root {
-  --background: #04101a;
-  --foreground: #e7eef7;
-  --card: #0a1723;
-  --card-foreground: #f8fbff;
-  --popover: #0a1723;
-  --popover-foreground: #e5eef8;
-  --primary: #22c1c3;
-  --primary-foreground: #07252a;
-  --secondary: #142434;
-  --secondary-foreground: #d9e7f5;
-  --muted: #0d1826;
-  --muted-foreground: #91a3b9;
-  --accent: #182636;
-  --accent-foreground: #dbeafe;
-  --destructive: #fb7185;
-  --border: rgba(148, 163, 184, 0.16);
-  --input: rgba(148, 163, 184, 0.22);
-  --ring: rgba(34, 193, 195, 0.32);
-  --radius: 1.15rem;
+  --background: #eef0f0;
+  --foreground: #132118;
+  --card: #fbfcf8;
+  --card-foreground: #132118;
+  --popover: #fbfcf8;
+  --popover-foreground: #132118;
+  --primary: #129420;
+  --primary-foreground: #f6fbf2;
+  --secondary: #deead7;
+  --secondary-foreground: #17301d;
+  --muted: #edf1e7;
+  --muted-foreground: #5d6a60;
+  --accent: #d9e6d1;
+  --accent-foreground: #17301d;
+  --destructive: #c54d41;
+  --border: rgba(18, 41, 23, 0.09);
+  --input: rgba(18, 41, 23, 0.12);
+  --ring: rgba(18, 148, 32, 0.18);
+  --radius: 1.25rem;
 }
 
 * {
@@ -58,12 +58,12 @@ html {
 body {
   min-height: 100vh;
   background:
-    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    radial-gradient(circle at top left, rgba(34, 193, 195, 0.09), transparent 26%),
-    radial-gradient(circle at 82% 8%, rgba(56, 189, 248, 0.08), transparent 22%),
-    linear-gradient(180deg, #040b14 0%, #06111c 52%, #040b14 100%);
-  background-size: 24px 24px, 24px 24px, auto, auto, auto;
+    linear-gradient(rgba(18, 41, 23, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 41, 23, 0.03) 1px, transparent 1px),
+    radial-gradient(circle at top left, rgba(180, 218, 167, 0.55), transparent 28%),
+    radial-gradient(circle at 88% 6%, rgba(18, 148, 32, 0.12), transparent 20%),
+    linear-gradient(180deg, #eef0f0 0%, #f7f7f2 48%, #edf3e7 100%);
+  background-size: 26px 26px, 26px 26px, auto, auto, auto;
   background-position: 0 0, 0 0, 0 0, 100% 0, 0 0;
   color: var(--foreground);
   text-rendering: optimizeLegibility;
@@ -71,8 +71,8 @@ body {
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.25);
-  color: #f8fbff;
+  background: rgba(18, 148, 32, 0.18);
+  color: #132118;
 }
 
 a {

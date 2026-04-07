@@ -36,7 +36,7 @@ type CaseWorkbenchProps = {
 };
 
 const selectClassName =
-  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/70 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15";
+  "h-10 w-full rounded-[18px] border border-[#d7e2d0] bg-white px-3 text-sm text-[#132118] outline-none transition focus:border-[#97bf89] focus:ring-2 focus:ring-[#d5e8ce]";
 
 function mergeCaseSummaries(
   current: InvestigationCaseSummary[],
@@ -247,12 +247,12 @@ export function CaseWorkbench({
   return (
     <Card>
       <CardHeader className="pb-4">
-        <CardTitle className="text-white">Case workbench</CardTitle>
+        <CardTitle className="text-[#132118]">Case workbench</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-            <Tags className="size-4 text-cyan-200" />
+          <div className="flex items-center gap-2 text-sm font-semibold text-[#132118]">
+            <Tags className="size-4 text-[#2b6631]" />
             Tags
           </div>
           <div className="flex flex-wrap gap-2">
@@ -263,7 +263,7 @@ export function CaseWorkbench({
                 </Badge>
               ))
             ) : (
-              <span className="text-sm text-slate-300/70">
+              <span className="text-sm text-[#6f7b72]">
                 No investigator tags yet.
               </span>
             )}
@@ -281,8 +281,8 @@ export function CaseWorkbench({
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-            <BriefcaseBusiness className="size-4 text-cyan-200" />
+          <div className="flex items-center gap-2 text-sm font-semibold text-[#132118]">
+            <BriefcaseBusiness className="size-4 text-[#2b6631]" />
             Linked investigation cases
           </div>
           <div className="space-y-3">
@@ -291,14 +291,14 @@ export function CaseWorkbench({
                 <Link
                   key={item.id}
                   href={`/cases/${item.id}`}
-                  className="block rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                  className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white">
+                      <div className="text-sm font-semibold text-[#132118]">
                         {item.title}
                       </div>
-                      <div className="mt-1 text-sm text-slate-300/76">
+                      <div className="mt-1 text-sm text-[#5d6a60]">
                         {item.summary || "No case summary recorded yet."}
                       </div>
                     </div>
@@ -311,7 +311,7 @@ export function CaseWorkbench({
                       </Badge>
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-slate-400">
+                  <div className="mt-3 text-xs text-[#76857a]">
                     {item.address_count} address{item.address_count === 1 ? "" : "es"} ·{" "}
                     {item.open_flag_count} open flag
                     {item.open_flag_count === 1 ? "" : "s"} · updated{" "}
@@ -320,7 +320,7 @@ export function CaseWorkbench({
                 </Link>
               ))
             ) : (
-              <p className="text-sm text-slate-300/70">
+              <p className="text-sm text-[#6f7b72]">
                 This address is not linked to any saved investigation case yet.
               </p>
             )}
@@ -328,11 +328,11 @@ export function CaseWorkbench({
 
           <div className="grid gap-4 xl:grid-cols-2">
             <form
-              className="space-y-3 rounded-[24px] border border-white/8 bg-black/20 p-4"
+              className="space-y-3 rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4"
               onSubmit={linkExistingCase}
             >
-              <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                <FolderPlus className="size-4 text-cyan-200" />
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#132118]">
+                <FolderPlus className="size-4 text-[#2b6631]" />
                 Attach to an existing case
               </div>
               <select
@@ -376,11 +376,11 @@ export function CaseWorkbench({
             </form>
 
             <form
-              className="space-y-3 rounded-[24px] border border-white/8 bg-black/20 p-4"
+              className="space-y-3 rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4"
               onSubmit={createCase}
             >
-              <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                <FolderPlus className="size-4 text-cyan-200" />
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#132118]">
+                <FolderPlus className="size-4 text-[#2b6631]" />
                 Open a new case from this address
               </div>
               <Input
@@ -441,8 +441,8 @@ export function CaseWorkbench({
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-            <NotebookPen className="size-4 text-cyan-200" />
+          <div className="flex items-center gap-2 text-sm font-semibold text-[#132118]">
+            <NotebookPen className="size-4 text-[#2b6631]" />
             Investigator notes
           </div>
           <form className="space-y-3" onSubmit={createNote}>
@@ -469,30 +469,34 @@ export function CaseWorkbench({
           </form>
         </div>
 
-        {status ? <p className="text-sm text-cyan-100">{status}</p> : null}
+        {status ? (
+          <p className="rounded-[18px] border border-[#b8d6ad] bg-[#edf4e8] px-3 py-2 text-sm text-[#2b6631]">
+            {status}
+          </p>
+        ) : null}
 
         <div className="space-y-3">
           {sortedNotes.length ? (
             sortedNotes.map((entry) => (
               <div
                 key={entry.id}
-                className="rounded-[24px] border border-white/8 bg-black/20 p-4"
+                className="rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-white">
+                  <span className="text-sm font-semibold text-[#132118]">
                     {entry.author || "Analyst"}
                   </span>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-[#76857a]">
                     {formatDateTime(entry.created_at)}
                   </span>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300/85">
+                <p className="mt-2 text-sm leading-6 text-[#4e5d52]">
                   {entry.note}
                 </p>
               </div>
             ))
           ) : (
-            <p className="text-sm text-slate-300/70">
+            <p className="text-sm text-[#6f7b72]">
               No case notes yet for this address.
             </p>
           )}

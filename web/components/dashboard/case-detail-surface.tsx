@@ -22,7 +22,7 @@ import {
 } from "@/lib/utils";
 
 const selectClassName =
-  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/70 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15";
+  "h-10 w-full rounded-[18px] border border-[#d7e2d0] bg-white px-3 text-sm text-[#132118] outline-none transition focus:border-[#97bf89] focus:ring-2 focus:ring-[#d5e8ce]";
 
 type CaseDetailSurfaceProps = {
   initialCase: InvestigationCaseDetail;
@@ -126,9 +126,9 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="bg-black/20 shadow-none">
+        <Card className="bg-white/82 shadow-none">
           <CardContent className="pt-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/72">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7b887d]">
               Status
             </div>
             <div className="mt-3">
@@ -136,9 +136,9 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-black/20 shadow-none">
+        <Card className="bg-white/82 shadow-none">
           <CardContent className="pt-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/72">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7b887d]">
               Priority
             </div>
             <div className="mt-3">
@@ -146,22 +146,22 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-black/20 shadow-none">
+        <Card className="bg-white/82 shadow-none">
           <CardContent className="pt-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/72">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7b887d]">
               Linked addresses
             </div>
-            <div className="mt-3 text-2xl font-semibold text-white">
+            <div className="mt-3 text-2xl font-semibold text-[#132118]">
               {detail.address_count}
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-black/20 shadow-none">
+        <Card className="bg-white/82 shadow-none">
           <CardContent className="pt-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/72">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7b887d]">
               Open flags
             </div>
-            <div className="mt-3 text-2xl font-semibold text-white">
+            <div className="mt-3 text-2xl font-semibold text-[#132118]">
               {detail.open_flag_count}
             </div>
           </CardContent>
@@ -171,9 +171,9 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-cyan-100">
+            <div className="flex items-center gap-2 text-[#2b6631]">
               <NotebookPen className="size-5" />
-              <CardTitle className="text-white">Case command</CardTitle>
+              <CardTitle className="text-[#132118]">Case command</CardTitle>
             </div>
             <CardDescription>
               Control ownership, priority, and status so the investigation can move through a real workflow.
@@ -230,13 +230,13 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
               </Button>
             </form>
 
-            <div className="rounded-[22px] border border-white/8 bg-black/20 p-4 text-sm text-slate-300/78">
+            <div className="rounded-[22px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-sm text-[#5d6a60]">
               Created {formatDateTime(detail.created_at)} · Updated{" "}
               {formatDateTime(detail.updated_at)} · Owner {detail.owner || "investigator"}
             </div>
 
             {feedback ? (
-              <p className="rounded-[18px] border border-cyan-300/20 bg-cyan-400/8 px-3 py-2 text-sm text-cyan-100">
+              <p className="rounded-[18px] border border-[#b8d6ad] bg-[#edf4e8] px-3 py-2 text-sm text-[#2b6631]">
                 {feedback}
               </p>
             ) : null}
@@ -245,9 +245,9 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-cyan-100">
+            <div className="flex items-center gap-2 text-[#2b6631]">
               <Radar className="size-5" />
-              <CardTitle className="text-white">Linked addresses</CardTitle>
+              <CardTitle className="text-[#132118]">Linked addresses</CardTitle>
             </div>
             <CardDescription>
               Save the cluster under investigation so tracing and notes become persistent.
@@ -296,14 +296,14 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
                   <Link
                     key={entry.id}
                     href={`/accounts/${encodeURIComponent(entry.address)}`}
-                    className="block rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                    className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">
+                        <div className="text-sm font-semibold text-[#132118]">
                           {entry.entity_name || formatAddress(entry.address, 8)}
                         </div>
-                        <div className="mt-1 text-sm text-slate-300/76">
+                        <div className="mt-1 text-sm text-[#5d6a60]">
                           {entry.address}
                         </div>
                       </div>
@@ -318,15 +318,15 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
                       </div>
                     </div>
                     {entry.note ? (
-                      <p className="mt-3 text-sm text-slate-300/76">{entry.note}</p>
+                      <p className="mt-3 text-sm text-[#5d6a60]">{entry.note}</p>
                     ) : null}
-                    <div className="mt-3 text-xs text-slate-400">
+                    <div className="mt-3 text-xs text-[#76857a]">
                       Added {formatDateTime(entry.added_at)}
                     </div>
                   </Link>
                 ))
               ) : (
-                <p className="text-sm text-slate-300/72">
+                <p className="text-sm text-[#6f7b72]">
                   No addresses have been attached to this case yet.
                 </p>
               )}
@@ -337,9 +337,9 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2 text-cyan-100">
+          <div className="flex items-center gap-2 text-[#2b6631]">
             <ShieldAlert className="size-5" />
-            <CardTitle className="text-white">Linked flags</CardTitle>
+            <CardTitle className="text-[#132118]">Linked flags</CardTitle>
           </div>
           <CardDescription>
             Flags already triaged into this case, ready for follow-up or closure.
@@ -354,10 +354,10 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {flag.flag_type.replace(/_/g, " ")}
                     </div>
-                    <div className="mt-1 text-sm text-slate-100/84">
+                    <div className="mt-1 text-sm text-[#425145]">
                       {flag.description}
                     </div>
                   </div>
@@ -370,17 +370,17 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
                     </Badge>
                   </div>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-100/78">
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[#607065]">
                   <Link
                     href={`/accounts/${encodeURIComponent(flag.address)}`}
-                    className="rounded-full border border-white/12 bg-white/8 px-3 py-1 transition hover:bg-white/12"
+                    className="rounded-full border border-[#d7e2d0] bg-white/88 px-3 py-1 transition hover:bg-white"
                   >
                     {formatAddress(flag.address, 7)}
                   </Link>
                   {flag.tx_hash ? (
                     <Link
                       href={`/transactions/${encodeURIComponent(flag.tx_hash)}`}
-                      className="rounded-full border border-white/12 bg-white/8 px-3 py-1 transition hover:bg-white/12"
+                      className="rounded-full border border-[#d7e2d0] bg-white/88 px-3 py-1 transition hover:bg-white"
                     >
                       {formatAddress(flag.tx_hash, 7)}
                     </Link>
@@ -390,19 +390,19 @@ export function CaseDetailSurface({ initialCase }: CaseDetailSurfaceProps) {
                     <span>reviewed {formatDateTime(flag.reviewed_at)}</span>
                   ) : null}
                 </div>
-                <div className="mt-3 space-y-1 text-sm text-slate-100/78">
+                <div className="mt-3 space-y-1 text-sm text-[#4e5d52]">
                   {flag.why_flagged ? <p>Why flagged: {flag.why_flagged}</p> : null}
                   {flag.trigger_logic ? <p>Trigger logic: {flag.trigger_logic}</p> : null}
                   {flag.provenance ? <p>Provenance: {flag.provenance}</p> : null}
                   {flag.next_action ? <p>Next action: {flag.next_action}</p> : null}
                 </div>
                 {flag.analyst_note ? (
-                  <p className="mt-3 text-sm text-slate-100/78">{flag.analyst_note}</p>
+                  <p className="mt-3 text-sm text-[#4e5d52]">{flag.analyst_note}</p>
                 ) : null}
               </div>
             ))
           ) : (
-            <p className="text-sm text-slate-300/72">
+            <p className="text-sm text-[#6f7b72]">
               No flags have been linked into this case yet.
             </p>
           )}

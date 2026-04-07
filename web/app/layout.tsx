@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Mono, Manrope } from "next/font/google";
 
 import { AppShell } from "@/components/dashboard/app-shell";
 import { LiveSnapshotProvider } from "@/components/dashboard/live-snapshot-provider";
 
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-sans",
 });
@@ -19,7 +19,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Forensic Listener",
-  description: "Ethereum transaction tracing, entity intelligence, and forensic alerting.",
+  description: "Ethereum investigation workspace for tracing, triage, and case review.",
 };
 
 export default function RootLayout({
@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body
-        className={`${spaceGrotesk.variable} ${ibmPlexMono.variable} overflow-x-hidden font-[family-name:var(--font-sans)]`}
+        className={`${manrope.variable} ${ibmPlexMono.variable} overflow-x-hidden font-[family-name:var(--font-sans)]`}
       >
         <LiveSnapshotProvider>
           <AppShell>{children}</AppShell>

@@ -39,7 +39,7 @@ import {
 
 const ANALYTICS_REFRESH_MS = 20_000;
 const selectClassName =
-  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/70 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15";
+  "h-10 w-full rounded-[18px] border border-[color:var(--border)] bg-white/85 px-3 text-sm text-[#152319] outline-none transition focus:border-[#9bc58b] focus:ring-2 focus:ring-[#dbeace]";
 
 type AlertsLiveSurfaceProps = {
   initialVelocityAlerts: VelocityAlert[];
@@ -247,29 +247,29 @@ export function AlertsLiveSurface({
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader>
-            <CardTitle className="text-white">Activity pressure</CardTitle>
+            <CardTitle className="text-[#132118]">Activity pressure</CardTitle>
             <CardDescription>
               Network-wide throughput context while triaging spikes.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="h-[230px] rounded-[24px] border border-white/8 bg-black/20 p-4">
+            <div className="h-[230px] rounded-[24px] border border-[#dbe3d8] bg-[#f4f7ef] p-4">
               <LineChart
                 values={chartValues}
-                stroke="rgb(251 191 36)"
-                fill="rgba(251, 191, 36, 0.15)"
+                stroke="rgb(196 119 40)"
+                fill="rgba(244, 234, 208, 0.65)"
               />
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               {networkMetrics.slice(-3).map((point) => (
                 <div
                   key={point.bucket}
-                  className="rounded-[22px] border border-white/8 bg-black/20 p-4"
+                  className="rounded-[22px] border border-[#dbe3d8] bg-white/78 p-4"
                 >
-                  <div className="text-sm font-semibold text-white">
+                  <div className="text-sm font-semibold text-[#132118]">
                     {formatDateTime(point.bucket)}
                   </div>
-                  <div className="mt-1 text-sm text-slate-300/78">
+                  <div className="mt-1 text-sm text-[#5d6a60]">
                     {formatCount(point.transaction_count)} tx ·{" "}
                     {formatWeiToEth(point.total_value)}
                   </div>
@@ -281,9 +281,9 @@ export function AlertsLiveSurface({
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-cyan-100">
+            <div className="flex items-center gap-2 text-[#2b6631]">
               <AlertTriangle className="size-5" />
-              <CardTitle className="text-white">Velocity alerts</CardTitle>
+              <CardTitle className="text-[#132118]">Velocity alerts</CardTitle>
             </div>
             <CardDescription>
               Addresses most worth opening as dossiers first.
@@ -299,28 +299,28 @@ export function AlertsLiveSurface({
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="text-sm font-semibold text-white">
+                      <div className="text-sm font-semibold text-[#132118]">
                         {alert.entity_name || formatAddress(alert.address, 7)}
                       </div>
-                      <div className="mt-1 text-sm text-slate-100/84">
+                      <div className="mt-1 text-sm text-[#5d6a60]">
                         {alert.entity_type || (alert.is_contract ? "contract" : "wallet")}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-semibold text-white">
+                      <div className="text-lg font-semibold text-[#132118]">
                         {alert.spike_ratio.toFixed(1)}x
                       </div>
-                      <div className="text-xs text-slate-100/75">spike ratio</div>
+                      <div className="text-xs text-[#69766b]">spike ratio</div>
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-slate-100/78">
+                  <div className="mt-3 text-xs text-[#69766b]">
                     Current {formatCount(alert.current_count)} vs baseline{" "}
                     {alert.baseline_count.toFixed(1)} · {formatDateTime(alert.last_seen)}
                   </div>
                 </Link>
               ))
             ) : (
-              <p className="text-sm text-slate-300/72">
+              <p className="text-sm text-[#6f7b72]">
                 No velocity alerts are active right now.
               </p>
             )}
@@ -331,7 +331,7 @@ export function AlertsLiveSurface({
       <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle className="text-white">Circular flow patterns</CardTitle>
+            <CardTitle className="text-[#132118]">Circular flow patterns</CardTitle>
             <CardDescription>
               Short return paths and loops surfaced by the graph engine.
             </CardDescription>
@@ -341,10 +341,10 @@ export function AlertsLiveSurface({
               circularFlows.map((flow, index) => (
                 <div
                   key={`${flow.path.join(":")}-${index}`}
-                  className="rounded-[24px] border border-white/8 bg-black/20 p-4"
+                  className="rounded-[24px] border border-[#dbe3d8] bg-white/78 p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {flow.hops} hop{flow.hops === 1 ? "" : "s"}
                     </div>
                     <Badge variant="outline">
@@ -356,7 +356,7 @@ export function AlertsLiveSurface({
                       <Link
                         key={`${flow.path.join(":")}:${stepIndex}:${address}`}
                         href={`/accounts/${encodeURIComponent(address)}`}
-                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-100"
+                        className="rounded-full border border-[#dbe3d8] bg-[#f4f7ef] px-3 py-1 text-xs text-[#3e4d42]"
                       >
                         {formatAddress(address, 5)}
                       </Link>
@@ -365,7 +365,7 @@ export function AlertsLiveSurface({
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-300/72">
+              <p className="text-sm text-[#6f7b72]">
                 No circular flow alerts are currently available.
               </p>
             )}
@@ -374,14 +374,14 @@ export function AlertsLiveSurface({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-white">Recent raised flags</CardTitle>
+            <CardTitle className="text-[#132118]">Recent raised flags</CardTitle>
             <CardDescription>
               Freshly surfaced events ordered for immediate triage.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {statusMessage ? (
-              <p className="rounded-[18px] border border-cyan-300/20 bg-cyan-400/8 px-3 py-2 text-sm text-cyan-100">
+              <p className="rounded-[18px] border border-[#b8d6ad] bg-[#edf4e8] px-3 py-2 text-sm text-[#2b6631]">
                 {statusMessage}
               </p>
             ) : null}
@@ -399,10 +399,10 @@ export function AlertsLiveSurface({
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">
+                        <div className="text-sm font-semibold text-[#132118]">
                           {flag.flag_type.replace(/_/g, " ")}
                         </div>
-                        <div className="mt-1 text-sm text-slate-100/84">
+                        <div className="mt-1 text-sm text-[#5d6a60]">
                           {flag.description}
                         </div>
                       </div>
@@ -424,13 +424,13 @@ export function AlertsLiveSurface({
                       </div>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-100/78">
+                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[#69766b]">
                       <span>{formatAddress(flag.address, 7)}</span>
                       <span>{formatDateTime(flag.detected_at)}</span>
                       {flag.tx_hash ? (
                         <Link
                           href={`/transactions/${encodeURIComponent(flag.tx_hash)}`}
-                          className="rounded-full border border-white/12 bg-white/8 px-3 py-1 transition hover:bg-white/12"
+                          className="rounded-full border border-[#dbe3d8] bg-white/80 px-3 py-1 transition hover:bg-white"
                         >
                           {formatAddress(flag.tx_hash, 7)}
                         </Link>
@@ -438,15 +438,15 @@ export function AlertsLiveSurface({
                       {flag.case_id && flag.case_title ? (
                         <Link
                           href={`/cases/${flag.case_id}`}
-                          className="rounded-full border border-white/12 bg-white/8 px-3 py-1 text-cyan-100 transition hover:bg-white/12"
+                          className="rounded-full border border-[#b8d6ad] bg-[#edf4e8] px-3 py-1 text-[#2b6631] transition hover:bg-[#e3efd9]"
                         >
                           {flag.case_title}
                         </Link>
                       ) : null}
                     </div>
 
-                    <div className="mt-4 space-y-3 rounded-[22px] border border-white/10 bg-black/20 p-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100/76">
+                    <div className="mt-4 space-y-3 rounded-[22px] border border-[#dbe3d8] bg-white/72 p-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#6b7a6d]">
                         Review
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -487,7 +487,7 @@ export function AlertsLiveSurface({
                             </option>
                           ))}
                         </select>
-                        <div className="text-xs text-slate-300/72 sm:self-center">
+                        <div className="text-xs text-[#69766b] sm:self-center">
                           {caseOptions.length
                             ? "Link this flag into an active case."
                             : "Create a case first if you want to preserve this alert in an investigation."}
@@ -504,7 +504,7 @@ export function AlertsLiveSurface({
                         placeholder="Analyst note: relevance, follow-up, and next step."
                       />
 
-                      <div className="space-y-1 text-sm text-slate-100/80">
+                      <div className="space-y-1 text-sm text-[#5d6a60]">
                         {flag.why_flagged ? <p>Why flagged: {flag.why_flagged}</p> : null}
                         {flag.trigger_logic ? <p>Trigger logic: {flag.trigger_logic}</p> : null}
                         {flag.provenance ? <p>Provenance: {flag.provenance}</p> : null}
@@ -548,7 +548,7 @@ export function AlertsLiveSurface({
                 );
               })
             ) : (
-              <p className="text-sm text-slate-300/72">
+              <p className="text-sm text-[#6f7b72]">
                 No recent flags were returned by the backend.
               </p>
             )}

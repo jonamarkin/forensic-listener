@@ -24,7 +24,7 @@ export default async function ContractsLandingPage() {
         actions={
           <Button asChild>
             <Link href="/graph">
-              Open flow canvas
+              Open graph
               <ArrowRight className="size-4" />
             </Link>
           </Button>
@@ -34,45 +34,45 @@ export default async function ContractsLandingPage() {
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-cyan-100">
+            <div className="flex items-center gap-2 text-[#2b6631]">
               <Fingerprint className="size-5" />
-              <CardTitle className="text-white">Recent contracts</CardTitle>
+              <CardTitle className="text-[#132118]">Recent contracts</CardTitle>
             </div>
             <CardDescription>
               Latest bytecode-bearing addresses available for review.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-3xl font-semibold text-white">
+          <CardContent className="text-3xl font-semibold text-[#132118]">
             {formatCount(recentContracts.length)}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-cyan-100">
+            <div className="flex items-center gap-2 text-[#2b6631]">
               <ScanSearch className="size-5" />
-              <CardTitle className="text-white">Flagged deployments</CardTitle>
+              <CardTitle className="text-[#132118]">Flagged deployments</CardTitle>
             </div>
             <CardDescription>
               Contracts already marked suspicious in the current recent slice.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-3xl font-semibold text-white">
+          <CardContent className="text-3xl font-semibold text-[#132118]">
             {formatCount(recentContracts.filter((contract) => contract.flagged).length)}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-cyan-100">
+            <div className="flex items-center gap-2 text-[#2b6631]">
               <Network className="size-5" />
-              <CardTitle className="text-white">Flow pivots ready</CardTitle>
+              <CardTitle className="text-[#132118]">Graph pivots ready</CardTitle>
             </div>
             <CardDescription>
               Every contract row links directly into graph tracing and dossier review.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-3xl font-semibold text-white">
+          <CardContent className="text-3xl font-semibold text-[#132118]">
             {formatCount(recentContracts.length)}
           </CardContent>
         </Card>
@@ -80,7 +80,7 @@ export default async function ContractsLandingPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-white">Recent contract queue</CardTitle>
+          <CardTitle className="text-[#132118]">Recent contract queue</CardTitle>
           <CardDescription>
             Use this as the starting list for bytecode review and clone hunting.
           </CardDescription>
@@ -91,14 +91,14 @@ export default async function ContractsLandingPage() {
               <Link
                 key={contract.address}
                 href={`/contracts/${encodeURIComponent(contract.address)}`}
-                className="block rounded-[26px] border border-white/8 bg-black/20 p-5 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                className="block rounded-[26px] border border-[#dbe3d8] bg-white/82 p-5 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {formatAddress(contract.address, 9)}
                     </div>
-                    <div className="mt-1 text-sm text-slate-300/78">
+                    <div className="mt-1 text-sm text-[#5d6a60]">
                       First seen {formatDateTime(contract.first_seen)}
                     </div>
                   </div>
@@ -106,14 +106,14 @@ export default async function ContractsLandingPage() {
                     {contract.flagged ? "flagged" : "observed"}
                   </Badge>
                 </div>
-                <div className="mt-4 text-sm text-slate-300/78">
+                <div className="mt-4 text-sm text-[#5d6a60]">
                   Bytecode size {formatCount(contract.bytecode_size)} · last seen{" "}
                   {formatDateTime(contract.last_seen)}
                 </div>
               </Link>
             ))
           ) : (
-            <p className="text-sm text-slate-300/72">
+            <p className="text-sm text-[#6f7b72]">
               No recent contracts are available from the backend yet.
             </p>
           )}

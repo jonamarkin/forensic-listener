@@ -106,42 +106,42 @@ export default async function TransactionPage({
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="bg-black/20 shadow-none">
+        <Card className="bg-white/82 shadow-none">
           <CardContent className="pt-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/72">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7b887d]">
               Value
             </div>
-            <div className="mt-3 text-2xl font-semibold text-white">
+            <div className="mt-3 text-2xl font-semibold text-[#132118]">
               {formatWeiToEth(tx.value)}
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-black/20 shadow-none">
+        <Card className="bg-white/82 shadow-none">
           <CardContent className="pt-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/72">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7b887d]">
               Block
             </div>
-            <div className="mt-3 text-2xl font-semibold text-white">
+            <div className="mt-3 text-2xl font-semibold text-[#132118]">
               {tx.block_number}
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-black/20 shadow-none">
+        <Card className="bg-white/82 shadow-none">
           <CardContent className="pt-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/72">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7b887d]">
               Gas price
             </div>
-            <div className="mt-3 text-2xl font-semibold text-white">
+            <div className="mt-3 text-2xl font-semibold text-[#132118]">
               {formatWeiToGwei(tx.gas_price)}
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-black/20 shadow-none">
+        <Card className="bg-white/82 shadow-none">
           <CardContent className="pt-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/72">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#7b887d]">
               Observed
             </div>
-            <div className="mt-3 text-base font-semibold text-white">
+            <div className="mt-3 text-base font-semibold text-[#132118]">
               {formatDateTime(tx.timestamp)}
             </div>
           </CardContent>
@@ -151,9 +151,9 @@ export default async function TransactionPage({
       <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-cyan-100">
+            <div className="flex items-center gap-2 text-[#2b6631]">
               <Network className="size-5" />
-              <CardTitle className="text-white">Counterparties</CardTitle>
+              <CardTitle className="text-[#132118]">Counterparties</CardTitle>
             </div>
             <CardDescription>
               Pivot directly into the sender and recipient dossiers from this transaction.
@@ -162,14 +162,14 @@ export default async function TransactionPage({
           <CardContent className="space-y-3">
             <Link
               href={`/accounts/${encodeURIComponent(tx.from)}`}
-              className="block rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+              className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-white">
+                  <div className="text-sm font-semibold text-[#132118]">
                     {fromProfile?.entity_name || "Sender"}
                   </div>
-                  <div className="mt-1 text-sm text-slate-300/76">{tx.from}</div>
+                  <div className="mt-1 text-sm text-[#5d6a60]">{tx.from}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Badge
@@ -187,14 +187,14 @@ export default async function TransactionPage({
             {tx.to ? (
               <Link
                 href={`/accounts/${encodeURIComponent(tx.to)}`}
-                className="block rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {toProfile?.entity_name || "Recipient"}
                     </div>
-                    <div className="mt-1 text-sm text-slate-300/76">{tx.to}</div>
+                    <div className="mt-1 text-sm text-[#5d6a60]">{tx.to}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge className={entityTone(toProfile?.entity_type)}>
@@ -207,7 +207,7 @@ export default async function TransactionPage({
                 </div>
               </Link>
             ) : (
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4 text-sm text-slate-300/78">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-sm text-[#556357]">
                 This transaction appears to be a contract creation and has no explicit
                 `to` address.
               </div>
@@ -217,17 +217,17 @@ export default async function TransactionPage({
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-cyan-100">
+            <div className="flex items-center gap-2 text-[#2b6631]">
               <Binary className="size-5" />
-              <CardTitle className="text-white">Payload</CardTitle>
+              <CardTitle className="text-[#132118]">Payload</CardTitle>
             </div>
             <CardDescription>
               Raw calldata or byte payload carried by the transaction.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-              <div className="font-mono text-xs leading-6 text-cyan-100 [overflow-wrap:anywhere]">
+            <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+              <div className="font-mono text-xs leading-6 text-[#2b6631] [overflow-wrap:anywhere]">
                 {payloadHex}
               </div>
             </div>
@@ -237,9 +237,9 @@ export default async function TransactionPage({
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2 text-cyan-100">
+          <div className="flex items-center gap-2 text-[#2b6631]">
             <Flag className="size-5" />
-            <CardTitle className="text-white">Linked forensic flags</CardTitle>
+            <CardTitle className="text-[#132118]">Linked forensic flags</CardTitle>
           </div>
           <CardDescription>
             Every flag already tied to this transaction, with rationale and next-step guidance.
@@ -254,10 +254,10 @@ export default async function TransactionPage({
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-sm font-semibold text-[#132118]">
                       {flag.flag_type.replace(/_/g, " ")}
                     </div>
-                    <div className="mt-1 text-sm text-slate-100/84">
+                    <div className="mt-1 text-sm text-[#425145]">
                       {flag.description}
                     </div>
                   </div>
@@ -271,17 +271,17 @@ export default async function TransactionPage({
                   </div>
                 </div>
 
-                <div className="mt-3 space-y-1 text-sm text-slate-100/80">
+                <div className="mt-3 space-y-1 text-sm text-[#4e5d52]">
                   {flag.why_flagged ? <p>Why flagged: {flag.why_flagged}</p> : null}
                   {flag.trigger_logic ? <p>Trigger logic: {flag.trigger_logic}</p> : null}
                   {flag.provenance ? <p>Provenance: {flag.provenance}</p> : null}
                   {flag.next_action ? <p>Next action: {flag.next_action}</p> : null}
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-100/78">
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[#607065]">
                   <Link
                     href={`/accounts/${encodeURIComponent(flag.address)}`}
-                    className="rounded-full border border-white/12 bg-white/8 px-3 py-1 transition hover:bg-white/12"
+                    className="rounded-full border border-[#d7e2d0] bg-white/88 px-3 py-1 transition hover:bg-white"
                   >
                     {formatAddress(flag.address, 7)}
                   </Link>
@@ -289,7 +289,7 @@ export default async function TransactionPage({
                   {flag.case_id && flag.case_title ? (
                     <Link
                       href={`/cases/${flag.case_id}`}
-                      className="rounded-full border border-white/12 bg-white/8 px-3 py-1 transition hover:bg-white/12"
+                      className="rounded-full border border-[#d7e2d0] bg-white/88 px-3 py-1 transition hover:bg-white"
                     >
                       {flag.case_title}
                     </Link>
@@ -298,7 +298,7 @@ export default async function TransactionPage({
               </div>
             ))
           ) : (
-            <p className="text-sm text-slate-300/72">
+            <p className="text-sm text-[#6f7b72]">
               No forensic flags are linked to this transaction right now.
             </p>
           )}

@@ -27,7 +27,7 @@ import {
 } from "@/lib/utils";
 
 const selectClassName =
-  "h-10 w-full rounded-[18px] border border-white/10 bg-slate-950/70 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15";
+  "h-10 w-full rounded-[18px] border border-[#d7e2d0] bg-white px-3 text-sm text-[#132118] outline-none transition focus:border-[#97bf89] focus:ring-2 focus:ring-[#d5e8ce]";
 
 type CasesSurfaceProps = {
   initialCases: InvestigationCaseSummary[];
@@ -160,7 +160,7 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
           <CardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle className="text-white">Case queue</CardTitle>
+                <CardTitle className="text-[#132118]">Case queue</CardTitle>
                 <CardDescription>
                   Saved investigations with counts for linked addresses and unresolved flags.
                 </CardDescription>
@@ -194,14 +194,14 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
                 <Link
                   key={item.id}
                   href={`/cases/${item.id}`}
-                  className="block rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                  className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white">
+                      <div className="text-sm font-semibold text-[#132118]">
                         {item.title}
                       </div>
-                      <div className="mt-1 text-sm text-slate-300/76">
+                      <div className="mt-1 text-sm text-[#5d6a60]">
                         {item.summary || "No case summary recorded yet."}
                       </div>
                     </div>
@@ -214,7 +214,7 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
                       </Badge>
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[#76857a]">
                     <span>
                       {item.address_count} address{item.address_count === 1 ? "" : "es"}
                     </span>
@@ -228,7 +228,7 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
                 </Link>
               ))
             ) : (
-              <p className="text-sm text-slate-300/72">
+              <p className="text-sm text-[#6f7b72]">
                 No investigation cases match the current filter.
               </p>
             )}
@@ -237,7 +237,7 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-white">Open a new case</CardTitle>
+            <CardTitle className="text-[#132118]">Open a new case</CardTitle>
             <CardDescription>
               Use this when an address cluster or alert thread deserves a saved investigation track.
             </CardDescription>
@@ -282,7 +282,7 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
             </form>
 
             {statusMessage ? (
-              <p className="rounded-[18px] border border-cyan-300/20 bg-cyan-400/8 px-3 py-2 text-sm text-cyan-100">
+              <p className="rounded-[18px] border border-[#b8d6ad] bg-[#edf4e8] px-3 py-2 text-sm text-[#2b6631]">
                 {statusMessage}
               </p>
             ) : null}

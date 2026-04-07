@@ -96,27 +96,27 @@ export default async function ContractPage({
               </Badge>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-cyan-200/76">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#7b887d]">
                   Bytecode size
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
+                <div className="mt-2 text-2xl font-semibold text-[#132118]">
                   {detail.bytecode_size.toLocaleString()}
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-cyan-200/76">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#7b887d]">
                   Verified
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
+                <div className="mt-2 text-2xl font-semibold text-[#132118]">
                   {detail.verified ? "Yes" : "No"}
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-cyan-200/76">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#7b887d]">
                   Compiler
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
+                <div className="mt-2 text-2xl font-semibold text-[#132118]">
                   {detail.compiler_version || "Unknown"}
                 </div>
               </div>
@@ -124,17 +124,17 @@ export default async function ContractPage({
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="text-sm font-semibold text-white">Lifecycle</div>
-                <div className="mt-3 space-y-2 text-sm text-slate-300/78">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4">
+                <div className="text-sm font-semibold text-[#132118]">Lifecycle</div>
+                <div className="mt-3 space-y-2 text-sm text-[#556357]">
                   <div>First seen: {formatDateTime(detail.first_seen)}</div>
                   <div>Last seen: {formatDateTime(detail.last_seen)}</div>
                   <div>Address: {detail.address}</div>
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                <div className="text-sm font-semibold text-white">Intelligence context</div>
-                <div className="mt-3 space-y-2 text-sm text-slate-300/78">
+              <div className="rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4">
+                <div className="text-sm font-semibold text-[#132118]">Intelligence context</div>
+                <div className="mt-3 space-y-2 text-sm text-[#556357]">
                   <div>Entity name: {detail.entity_name || "Unlabeled"}</div>
                   <div>Risk level: {detail.risk_level || "Unknown"}</div>
                   <div>Source artifacts: {detail.source_code ? "available" : "missing"}</div>
@@ -142,30 +142,30 @@ export default async function ContractPage({
               </div>
             </div>
 
-            <Card className="border-white/6 bg-black/20 shadow-none">
+            <Card className="border-[#dbe3d8] bg-[#fdfefb] shadow-none">
               <CardHeader>
-                <div className="flex items-center gap-2 text-cyan-100">
+                <div className="flex items-center gap-2 text-[#2b6631]">
                   <Binary className="size-5" />
-                  <CardTitle className="text-white">Bytecode</CardTitle>
+                  <CardTitle className="text-[#132118]">Bytecode</CardTitle>
                 </div>
                 <CardDescription>
                   Use this as the low-level fingerprint when source code is not available.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-white/8 bg-slate-950/80 p-4 text-xs leading-6 text-slate-200">
+                <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-xs leading-6 text-[#314137]">
                   {detail.bytecode || "No bytecode stored."}
                 </pre>
               </CardContent>
             </Card>
 
             {detail.source_code ? (
-              <Card className="border-white/6 bg-black/20 shadow-none">
+              <Card className="border-[#dbe3d8] bg-[#fdfefb] shadow-none">
                 <CardHeader>
-                  <CardTitle className="text-white">Source code</CardTitle>
+                  <CardTitle className="text-[#132118]">Source code</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-white/8 bg-slate-950/80 p-4 text-xs leading-6 text-slate-200">
+                  <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-xs leading-6 text-[#314137]">
                     {detail.source_code}
                   </pre>
                 </CardContent>
@@ -173,12 +173,12 @@ export default async function ContractPage({
             ) : null}
 
             {detail.decompiled_code ? (
-              <Card className="border-white/6 bg-black/20 shadow-none">
+              <Card className="border-[#dbe3d8] bg-[#fdfefb] shadow-none">
                 <CardHeader>
-                  <CardTitle className="text-white">Decompiled view</CardTitle>
+                  <CardTitle className="text-[#132118]">Decompiled view</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-white/8 bg-slate-950/80 p-4 text-xs leading-6 text-slate-200">
+                  <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-xs leading-6 text-[#314137]">
                     {detail.decompiled_code}
                   </pre>
                 </CardContent>
@@ -186,12 +186,12 @@ export default async function ContractPage({
             ) : null}
 
             {detail.abi ? (
-              <Card className="border-white/6 bg-black/20 shadow-none">
+              <Card className="border-[#dbe3d8] bg-[#fdfefb] shadow-none">
                 <CardHeader>
-                  <CardTitle className="text-white">ABI</CardTitle>
+                  <CardTitle className="text-[#132118]">ABI</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-white/8 bg-slate-950/80 p-4 text-xs leading-6 text-slate-200">
+                  <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-xs leading-6 text-[#314137]">
                     {prettyJson(detail.abi)}
                   </pre>
                 </CardContent>
@@ -203,9 +203,9 @@ export default async function ContractPage({
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2 text-cyan-100">
+              <div className="flex items-center gap-2 text-[#2b6631]">
                 <Fingerprint className="size-5" />
-                <CardTitle className="text-white">Similar contracts</CardTitle>
+                <CardTitle className="text-[#132118]">Similar contracts</CardTitle>
               </div>
               <CardDescription>
                 Nearest bytecode neighbors from pgvector to help spot clones or variants.
@@ -217,14 +217,14 @@ export default async function ContractPage({
                   <Link
                     key={match.address}
                     href={`/contracts/${encodeURIComponent(match.address)}`}
-                    className="block rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                    className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-sm font-semibold text-white">
+                        <div className="text-sm font-semibold text-[#132118]">
                           {formatAddress(match.address, 8)}
                         </div>
-                        <div className="mt-1 text-sm text-slate-300/76">
+                        <div className="mt-1 text-sm text-[#5d6a60]">
                           Similarity {formatSimilarity(match.similarity)}
                         </div>
                       </div>
@@ -235,7 +235,7 @@ export default async function ContractPage({
                   </Link>
                 ))
               ) : (
-                <p className="text-sm text-slate-300/72">
+                <p className="text-sm text-[#6f7b72]">
                   No similar contracts were returned for this bytecode yet.
                 </p>
               )}
@@ -244,12 +244,12 @@ export default async function ContractPage({
 
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2 text-cyan-100">
+              <div className="flex items-center gap-2 text-[#2b6631]">
                 <ShieldAlert className="size-5" />
-                <CardTitle className="text-white">Review guidance</CardTitle>
+                <CardTitle className="text-[#132118]">Review guidance</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-slate-300/80">
+            <CardContent className="space-y-3 text-sm text-[#556357]">
               <p>
                 Start with the similar-contract matches if you suspect a cloned
                 scam or templated deployment pattern.

@@ -10,12 +10,12 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[0_10px_28px_rgba(34,193,195,0.16)] hover:bg-[color-mix(in_oklab,var(--primary)_90%,white)]",
+          "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[0_10px_28px_rgba(18,148,32,0.14)] hover:bg-[color-mix(in_oklab,var(--primary)_90%,white)]",
         secondary:
-          "border border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]",
-        ghost: "text-slate-200 hover:bg-white/[0.05]",
+          "border border-[color:var(--border)] bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[color-mix(in_oklab,var(--secondary)_88%,white)]",
+        ghost: "text-[#2f3f35] hover:bg-[#e7eee0]",
         outline:
-          "border border-white/10 bg-transparent text-slate-100 hover:border-cyan-300/25 hover:bg-cyan-400/[0.07]",
+          "border border-[color:var(--border)] bg-transparent text-[#223228] hover:border-[#9cc48d] hover:bg-[#edf4e8]",
       },
       size: {
         default: "h-10 px-4 py-2",

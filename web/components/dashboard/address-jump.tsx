@@ -28,14 +28,14 @@ export function AddressJump() {
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2 rounded-[24px] border border-white/8 bg-black/20 p-3 sm:rounded-[26px] md:max-w-[440px] md:min-w-[340px] md:flex-row md:items-center">
+    <div className="flex w-full min-w-0 flex-col gap-2 rounded-[24px] border border-[color:var(--border)] bg-white/80 p-3 sm:rounded-[26px] md:max-w-[440px] md:min-w-[340px] md:flex-row md:items-center">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <Search className="size-4 text-cyan-200/80" />
+        <Search className="size-4 text-[#6b7c6e]" />
         <Input
           value={address}
           onChange={(event) => setAddress(event.target.value)}
-          placeholder="Jump to an address or contract"
-          className="h-10 border-none bg-transparent px-0 shadow-none focus:ring-0"
+          placeholder="Search an address or contract"
+          className="h-10 border-none bg-transparent px-0 text-[#132118] shadow-none focus:ring-0"
         />
       </div>
       <div className="flex min-w-0 gap-2">

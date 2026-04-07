@@ -29,7 +29,7 @@ const navItems = [
   },
   {
     href: "/graph",
-    label: "Flow Canvas",
+    label: "Graph",
     description: "Tracing, hubs, and path expansion.",
     icon: Network,
   },
@@ -74,25 +74,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className={cn(
               "group flex items-start gap-4 rounded-[22px] border px-4 py-4 transition-all",
               active
-                ? "border-cyan-300/25 bg-cyan-400/[0.08] shadow-[0_12px_36px_rgba(34,193,195,0.08)]"
-                : "border-transparent bg-white/[0.02] hover:border-white/8 hover:bg-white/[0.04]",
+                ? "border-[#b8d6ad] bg-[#e7f1dd] shadow-[0_10px_30px_rgba(18,41,23,0.08)]"
+                : "border-transparent bg-transparent hover:border-[#dbe3d8] hover:bg-white/70",
             )}
           >
             <span
               className={cn(
                 "mt-0.5 flex size-10 items-center justify-center rounded-2xl border",
                 active
-                  ? "border-cyan-300/25 bg-cyan-400/[0.08] text-cyan-100"
-                  : "border-white/8 bg-white/5 text-slate-300 group-hover:text-white",
+                  ? "border-[#bdd5b5] bg-[#f3f7ee] text-[#2a6530]"
+                  : "border-[#dbe3d8] bg-white/80 text-[#607063] group-hover:text-[#17301d]",
               )}
             >
               <Icon className="size-5" />
             </span>
             <span className="space-y-1">
-              <span className="block text-sm font-semibold text-white">
+              <span className="block text-sm font-semibold text-[#132118]">
                 {item.label}
               </span>
-              <span className="block text-sm leading-5 text-slate-300/75">
+              <span className="block text-sm leading-5 text-[#607063]">
                 {item.description}
               </span>
             </span>
@@ -106,17 +106,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen overflow-x-clip text-[var(--foreground)]">
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-4 px-3 py-3 sm:px-4 md:flex-row md:gap-6 md:px-6 md:py-4">
         <div className="sticky top-3 z-40 md:hidden">
-          <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(12,23,35,0.94),rgba(6,14,24,0.98))] px-4 py-4 shadow-[0_24px_72px_rgba(2,6,23,0.36)] backdrop-blur-xl">
+          <div className="rounded-[28px] border border-[color:var(--border)] bg-[linear-gradient(180deg,rgba(251,252,248,0.94),rgba(240,244,234,0.98))] px-4 py-4 shadow-[0_20px_56px_rgba(18,41,23,0.08)] backdrop-blur-xl">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
-                <Badge variant="outline" className="w-fit text-cyan-100">
+                <Badge variant="outline" className="w-fit">
                   Forensic Listener
                 </Badge>
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-cyan-200/80">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#6b7a6d]">
                     Ethereum investigation workspace
                   </p>
-                  <h1 className="mt-1 text-xl font-semibold tracking-tight text-white">
+                  <h1 className="mt-1 text-xl font-semibold tracking-tight text-[#132118]">
                     Analyst workspace
                   </h1>
                 </div>
@@ -124,7 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setMobileNavOpen((current) => !current)}
-                className="inline-flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10"
+                className="inline-flex size-11 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white/85 text-[#17301d] transition hover:bg-white"
                 aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
                 aria-expanded={mobileNavOpen}
               >
@@ -145,8 +145,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       className={cn(
                         "rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap transition",
                         active
-                          ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-100"
-                          : "border-white/10 bg-white/5 text-slate-200",
+                          ? "border-[#b8d6ad] bg-[#e7f1dd] text-[#1f5d26]"
+                          : "border-[#dbe3d8] bg-white/75 text-[#576559]",
                       )}
                     >
                       {item.label}
@@ -159,28 +159,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {mobileNavOpen ? (
-          <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm md:hidden">
-            <div className="absolute inset-y-0 right-0 w-full max-w-sm border-l border-white/10 bg-[linear-gradient(180deg,rgba(12,23,35,0.97),rgba(6,14,24,0.99))] p-5 shadow-[0_28px_120px_rgba(2,6,23,0.5)]">
+          <div className="fixed inset-0 z-50 bg-[#132118]/20 backdrop-blur-sm md:hidden">
+            <div className="absolute inset-y-0 right-0 w-full max-w-sm border-l border-[color:var(--border)] bg-[linear-gradient(180deg,rgba(251,252,248,0.98),rgba(239,244,232,0.99))] p-5 shadow-[0_28px_96px_rgba(18,41,23,0.12)]">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan-200/78">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#6b7a6d]">
                     Navigation
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-white">
-                    Investigation routes
+                  <p className="mt-1 text-lg font-semibold text-[#132118]">
+                    Main routes
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setMobileNavOpen(false)}
-                  className="inline-flex size-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-100"
+                  className="inline-flex size-10 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white/85 text-[#17301d]"
                   aria-label="Close navigation"
                 >
                   <X className="size-5" />
                 </button>
               </div>
               <div className="mt-6">{renderNav("mobile")}</div>
-              <div className="mt-6 rounded-[22px] border border-white/8 bg-black/20 p-4 text-sm text-slate-300/78">
+              <div className="mt-6 rounded-[22px] border border-[color:var(--border)] bg-white/72 p-4 text-sm text-[#5d6a60]">
                 Use the jump bar to open an address dossier or trace route from
                 any page.
               </div>
@@ -189,19 +189,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : null}
 
         <aside className="hidden md:sticky md:top-4 md:block md:h-[calc(100vh-2rem)] md:w-[310px] md:flex-shrink-0">
-          <div className="flex h-full flex-col overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(12,23,35,0.9),rgba(6,14,24,0.98))] p-6 shadow-[0_28px_96px_rgba(2,6,23,0.36)]">
+          <div className="flex h-full flex-col overflow-hidden rounded-[32px] border border-[color:var(--border)] bg-[linear-gradient(180deg,rgba(231,238,222,0.95),rgba(244,247,239,0.98))] p-6 shadow-[0_24px_72px_rgba(18,41,23,0.08)]">
             <div className="space-y-4">
-              <Badge variant="outline" className="w-fit text-cyan-100">
+              <Badge variant="outline" className="w-fit">
                 Forensic Listener
               </Badge>
               <div>
-                <p className="font-mono text-xs uppercase tracking-[0.26em] text-cyan-200/80">
+                <p className="font-mono text-xs uppercase tracking-[0.26em] text-[#6b7a6d]">
                   Ethereum investigation workspace
                 </p>
-                <h1 className="mt-2 text-[2rem] font-semibold tracking-tight text-white">
-                  Analyst console
+                <h1 className="mt-2 text-[2.2rem] font-semibold tracking-tight text-[#132118]">
+                  Investigation studio
                 </h1>
-                <p className="mt-3 max-w-sm text-sm leading-6 text-slate-300/80">
+                <p className="mt-3 max-w-sm text-sm leading-6 text-[#5d6a60]">
                   Review activity, trace funds, inspect entities, and preserve
                   investigations in a single workspace.
                 </p>
@@ -210,21 +210,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             {renderNav("desktop")}
 
-            <div className="mt-auto rounded-[24px] border border-white/8 bg-black/20 p-5">
+            <div className="mt-auto rounded-[28px] border border-[#dbe3d8] bg-white/78 p-5">
               <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-cyan-500/12 text-cyan-100">
+                <div className="flex size-11 items-center justify-center rounded-2xl bg-[#edf4e8] text-[#2a6530]">
                   <SquareTerminal className="size-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-sm font-semibold text-[#132118]">
                     Data stack
                   </p>
-                  <p className="text-sm text-slate-300/75">
+                  <p className="text-sm text-[#5d6a60]">
                     Go API + Postgres + Neo4j + pgvector.
                   </p>
                 </div>
               </div>
-              <div className="mt-4 rounded-2xl border border-white/8 bg-slate-950/55 px-4 py-3 text-sm text-slate-300/78">
+              <div className="mt-4 rounded-2xl border border-[#dbe3d8] bg-[#f4f7ef] px-4 py-3 text-sm text-[#5d6a60]">
                 Live Ethereum ingestion with a small curated entity reference
                 layer for better labeling and triage.
               </div>
@@ -233,16 +233,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="min-w-0 w-full flex-1 overflow-x-clip">
-          <header className="mb-4 flex flex-col gap-4 overflow-hidden rounded-[24px] border border-white/8 bg-slate-950/35 px-4 py-4 backdrop-blur-xl sm:px-5 sm:py-5 md:mb-6 md:px-6 md:flex-row md:items-center md:justify-between">
+          <header className="mb-4 flex flex-col gap-4 overflow-hidden rounded-[30px] border border-[color:var(--border)] bg-white/80 px-5 py-5 backdrop-blur-xl sm:px-6 md:mb-6 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-cyan-200/80">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[#6b7a6d]">
                 <Activity className="size-4" />
                 Investigator workspace
               </div>
-              <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              <h2 className="text-xl font-semibold tracking-tight text-[#132118] sm:text-2xl">
                 Review, trace, and document suspicious activity.
               </h2>
-              <p className="max-w-3xl text-sm leading-6 text-slate-300/76">
+              <p className="max-w-3xl text-sm leading-6 text-[#5d6a60]">
                 Use overview for system context, alerts for triage, graph for
                 tracing, accounts for dossiers, and cases for preserved
                 investigations.

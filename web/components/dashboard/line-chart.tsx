@@ -4,8 +4,8 @@ export function LineChart({
   values,
   height = 180,
   className,
-  stroke = "rgb(34 211 238)",
-  fill = "rgba(34, 211, 238, 0.16)",
+  stroke = "rgb(18 148 32)",
+  fill = "rgba(180, 218, 167, 0.35)",
 }: {
   values: number[];
   height?: number;
@@ -51,7 +51,7 @@ export function LineChart({
           x2={width}
           y1={height * ratio}
           y2={height * ratio}
-          stroke="rgba(148, 163, 184, 0.14)"
+          stroke="rgba(93, 110, 93, 0.14)"
           strokeDasharray="4 8"
         />
       ))}
@@ -68,7 +68,7 @@ export function LineChart({
         const [x, y] = point.split(",");
         return (
           <g key={point}>
-            <circle cx={x} cy={y} r="7" fill="rgba(34, 211, 238, 0.18)" />
+            <circle cx={x} cy={y} r="7" fill="rgba(180, 218, 167, 0.42)" />
             <circle cx={x} cy={y} r="3.5" fill={stroke} />
           </g>
         );

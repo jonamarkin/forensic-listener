@@ -63,8 +63,8 @@ export default async function GraphPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-white">Trace controls</CardTitle>
-            <CardDescription>
+          <CardTitle className="text-[#132118]">Trace controls</CardTitle>
+          <CardDescription>
             Adjust graph scope and optionally request a concrete return or destination path.
           </CardDescription>
         </CardHeader>
@@ -78,10 +78,10 @@ export default async function GraphPage({
             <select
               name="depth"
               defaultValue={String(depth)}
-              className="flex h-11 rounded-2xl border border-white/10 bg-slate-950/70 px-4 text-sm text-slate-50 outline-none focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/15"
+              className="flex h-11 rounded-2xl border border-[#d7e2d0] bg-white px-4 text-sm text-[#132118] outline-none focus:border-[#97bf89] focus:ring-2 focus:ring-[#d5e8ce]"
             >
               {[1, 2, 3, 4].map((option) => (
-                <option key={option} value={option} className="bg-slate-950">
+                <option key={option} value={option}>
                   {option} hop{option > 1 ? "s" : ""}
                 </option>
               ))}
@@ -126,15 +126,15 @@ export default async function GraphPage({
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-white">Graph reading guide</CardTitle>
+              <CardTitle className="text-[#132118]">Graph reading guide</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-slate-300/80">
+            <CardContent className="space-y-3 text-sm text-[#556357]">
               <div className="flex flex-wrap gap-2">
                 <Badge variant="success">wallet</Badge>
-                <Badge className="bg-indigo-500/15 text-indigo-100 border-indigo-400/30">
+                <Badge className="border-[#c8d3ee] bg-[#ebeffb] text-[#44507d]">
                   contract
                 </Badge>
-                <Badge className="bg-cyan-500/15 text-cyan-100 border-cyan-400/30">
+                <Badge className="border-[#c0d8ce] bg-[#e6f1eb] text-[#2f6c58]">
                   hub
                 </Badge>
                 <Badge variant="danger">high risk</Badge>
@@ -150,7 +150,7 @@ export default async function GraphPage({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-white">Known hubs</CardTitle>
+              <CardTitle className="text-[#132118]">Known hubs</CardTitle>
               <CardDescription>
                 A shortlist of entities worth expanding first.
               </CardDescription>
@@ -160,14 +160,14 @@ export default async function GraphPage({
                 <Link
                   key={hub.address}
                   href={`/graph?address=${encodeURIComponent(hub.address)}&depth=2`}
-                  className="block rounded-[24px] border border-white/8 bg-black/20 p-4 transition hover:border-cyan-300/25 hover:bg-cyan-400/6"
+                  className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold text-white">
+                      <div className="text-sm font-semibold text-[#132118]">
                         {hub.entity_name || formatAddress(hub.address, 7)}
                       </div>
-                      <div className="mt-1 text-sm text-slate-300/76">
+                      <div className="mt-1 text-sm text-[#5d6a60]">
                         {hub.entity_type || (hub.is_contract ? "contract" : "wallet")}
                       </div>
                     </div>
@@ -175,7 +175,7 @@ export default async function GraphPage({
                       {hub.risk_level || "observed"}
                     </Badge>
                   </div>
-                  <div className="mt-3 text-xs text-slate-300/72">
+                  <div className="mt-3 text-xs text-[#76857a]">
                     degree {formatCount(hub.degree)} · in {formatCount(hub.incoming_count)} / out{" "}
                     {formatCount(hub.outgoing_count)}
                   </div>
@@ -186,7 +186,7 @@ export default async function GraphPage({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-white">Path trace</CardTitle>
+              <CardTitle className="text-[#132118]">Path trace</CardTitle>
               <CardDescription>
                 When a target is supplied, the shortest bounded path appears here.
               </CardDescription>
@@ -194,8 +194,8 @@ export default async function GraphPage({
             <CardContent className="space-y-3">
               {trace ? (
                 <>
-                  <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-                    <div className="text-sm text-slate-300/78">
+                  <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
+                    <div className="text-sm text-[#556357]">
                       {trace.hops} hop{trace.hops === 1 ? "" : "s"} between{" "}
                       {formatAddress(trace.from)} and {formatAddress(trace.to)}.
                     </div>
@@ -210,19 +210,19 @@ export default async function GraphPage({
                   {trace.edges.map((edge) => (
                     <div
                       key={`${edge.hash}:${edge.from}:${edge.to}`}
-                      className="rounded-[22px] border border-white/8 bg-black/20 p-4"
+                      className="rounded-[22px] border border-[#dbe3d8] bg-white/82 p-4"
                     >
-                      <div className="text-sm font-semibold text-white">
+                      <div className="text-sm font-semibold text-[#132118]">
                         {formatAddress(edge.from)} → {formatAddress(edge.to)}
                       </div>
-                      <div className="mt-2 text-sm text-slate-300/78">
+                      <div className="mt-2 text-sm text-[#5d6a60]">
                         {formatWeiToEth(edge.value)} · {formatDateTime(edge.timestamp)}
                       </div>
                     </div>
                   ))}
                 </>
               ) : (
-                <p className="text-sm text-slate-300/72">
+                <p className="text-sm text-[#6f7b72]">
                   No target path requested yet. Add a destination address above
                   when you want a concrete route, not just the local graph.
                 </p>

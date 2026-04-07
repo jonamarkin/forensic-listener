@@ -6,28 +6,28 @@ import { cn, formatAddress, riskTone } from "@/lib/utils";
 function nodeColors(node: GraphNode) {
   if (node.is_hub) {
     return {
-      fill: "rgba(14, 165, 233, 0.88)",
-      ring: "rgba(56, 189, 248, 0.35)",
+      fill: "rgba(31, 97, 113, 0.92)",
+      ring: "rgba(184, 223, 225, 0.72)",
       text: "white",
     };
   }
   if (node.risk_level?.toLowerCase() === "high") {
     return {
-      fill: "rgba(244, 63, 94, 0.88)",
-      ring: "rgba(251, 113, 133, 0.3)",
+      fill: "rgba(147, 63, 52, 0.92)",
+      ring: "rgba(233, 184, 179, 0.72)",
       text: "white",
     };
   }
   if (node.is_contract) {
     return {
-      fill: "rgba(99, 102, 241, 0.88)",
-      ring: "rgba(129, 140, 248, 0.28)",
+      fill: "rgba(70, 83, 125, 0.9)",
+      ring: "rgba(202, 211, 237, 0.8)",
       text: "white",
     };
   }
   return {
-    fill: "rgba(34, 197, 94, 0.88)",
-    ring: "rgba(74, 222, 128, 0.24)",
+    fill: "rgba(43, 102, 49, 0.9)",
+    ring: "rgba(190, 215, 182, 0.78)",
     text: "white",
   };
 }
@@ -58,7 +58,7 @@ export function GraphMap({
 }) {
   if (!graph || !graph.nodes.length) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-white/12 bg-black/20 px-5 text-center text-sm text-slate-300/70 sm:min-h-[420px]">
+      <div className="flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-[#dbe3d8] bg-white/75 px-5 text-center text-sm text-[#5d6a60] sm:min-h-[420px]">
         Select an address to render a multi-hop flow canvas.
       </div>
     );
@@ -113,17 +113,17 @@ export function GraphMap({
   const hiddenLabelCount = Math.max(graph.nodes.length - labeledNodeIds.size, 0);
 
   return (
-    <div className="overflow-hidden rounded-[30px] border border-white/8 bg-[radial-gradient(circle_at_center,rgba(8,47,73,0.46),rgba(2,6,23,0.92))]">
-      <div className="border-b border-white/8 px-4 py-4 sm:px-5">
-        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-200/78">
+    <div className="overflow-hidden rounded-[30px] border border-[color:var(--border)] bg-[radial-gradient(circle_at_center,rgba(180,218,167,0.26),rgba(248,250,244,0.98))]">
+      <div className="border-b border-[color:var(--border)] px-4 py-4 sm:px-5">
+        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[#6b7a6d]">
           Flow Topology
         </p>
-        <p className="mt-2 text-sm text-slate-300/80">
+        <p className="mt-2 text-sm text-[#5d6a60]">
           Centered on {centerNode.entity_name || formatAddress(centerNode.id)} with{" "}
           {graph.nodes.length} nodes and {graph.edges.length} directional edges.
         </p>
         {hiddenLabelCount ? (
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-[#718075]">
             Labels are prioritized to keep the map readable. Every node is still clickable.
           </p>
         ) : null}
@@ -143,7 +143,7 @@ export function GraphMap({
               rx={ring * 138}
               ry={ring * 104}
               fill="none"
-              stroke="rgba(148, 163, 184, 0.08)"
+              stroke="rgba(93, 110, 93, 0.12)"
               strokeDasharray="6 12"
             />
           ))}
@@ -162,8 +162,8 @@ export function GraphMap({
                 y2={to.y}
                 stroke={
                   edge.from === centerNode.id || edge.to === centerNode.id
-                    ? "rgba(56, 189, 248, 0.34)"
-                    : "rgba(56, 189, 248, 0.18)"
+                    ? "rgba(18, 148, 32, 0.28)"
+                    : "rgba(93, 110, 93, 0.18)"
                 }
                 strokeWidth={edge.from === centerNode.id || edge.to === centerNode.id ? 2.2 : 1.1}
               />
@@ -196,12 +196,12 @@ export function GraphMap({
                     <Link
                       href={href}
                       className={cn(
-                        "block rounded-2xl border bg-slate-950/80 px-3 py-2 text-center text-xs shadow-lg backdrop-blur",
+                        "block rounded-2xl border bg-white/92 px-3 py-2 text-center text-xs shadow-[0_10px_30px_rgba(18,41,23,0.08)] backdrop-blur",
                         riskTone(node.risk_level),
                       )}
                     >
-                      <div className="truncate font-semibold text-white">{label}</div>
-                      <div className="truncate text-[11px] uppercase tracking-[0.14em] text-slate-200/80">
+                      <div className="truncate font-semibold text-[#132118]">{label}</div>
+                      <div className="truncate text-[11px] uppercase tracking-[0.14em] text-[#5d6a60]">
                         {node.entity_type || (node.is_contract ? "contract" : "wallet")}
                       </div>
                     </Link>
