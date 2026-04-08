@@ -26,7 +26,7 @@
 }
 
 :root {
-  --background: #eef0f0;
+  --background: #f1f2ed;
   --foreground: #132118;
   --card: #fbfcf8;
   --card-foreground: #132118;
@@ -34,17 +34,17 @@
   --popover-foreground: #132118;
   --primary: #129420;
   --primary-foreground: #f6fbf2;
-  --secondary: #deead7;
+  --secondary: #eef3e8;
   --secondary-foreground: #17301d;
   --muted: #edf1e7;
   --muted-foreground: #5d6a60;
   --accent: #d9e6d1;
   --accent-foreground: #17301d;
   --destructive: #c54d41;
-  --border: rgba(18, 41, 23, 0.09);
-  --input: rgba(18, 41, 23, 0.12);
+  --border: rgba(18, 41, 23, 0.08);
+  --input: rgba(18, 41, 23, 0.1);
   --ring: rgba(18, 148, 32, 0.18);
-  --radius: 1.25rem;
+  --radius: 1.35rem;
 }
 
 * {
@@ -58,14 +58,21 @@ html {
 body {
   min-height: 100vh;
   background:
-    linear-gradient(rgba(18, 41, 23, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(18, 41, 23, 0.03) 1px, transparent 1px),
-    radial-gradient(circle at top left, rgba(180, 218, 167, 0.55), transparent 28%),
-    radial-gradient(circle at 88% 6%, rgba(18, 148, 32, 0.12), transparent 20%),
-    linear-gradient(180deg, #eef0f0 0%, #f7f7f2 48%, #edf3e7 100%);
-  background-size: 26px 26px, 26px 26px, auto, auto, auto;
-  background-position: 0 0, 0 0, 0 0, 100% 0, 0 0;
+    radial-gradient(circle at 0% 0%, rgba(180, 218, 167, 0.42), transparent 26%),
+    radial-gradient(circle at 100% 0%, rgba(18, 148, 32, 0.08), transparent 18%),
+    radial-gradient(circle at 50% 100%, rgba(186, 203, 174, 0.18), transparent 28%),
+    linear-gradient(180deg, #f1f2ed 0%, #f7f7f2 52%, #eff3ea 100%);
   color: var(--foreground);
+  font-family:
+    "SF Pro Display",
+    "SF Pro Text",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  line-height: 1.45;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }

@@ -5,16 +5,14 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import {
   ArrowRight,
   BriefcaseBusiness,
+  Filter,
   FolderPlus,
   LoaderCircle,
   ShieldAlert,
 } from "lucide-react";
 
-import { MetricCard } from "@/components/dashboard/metric-card";
-import { PageHeading } from "@/components/dashboard/page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { clientApiFetch } from "@/lib/client-api";
@@ -45,6 +43,33 @@ function mergeCaseSummaries(
   return [...byID.values()].sort(
     (left, right) =>
       new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+  );
+}
+
+function CaseMetric({
+  title,
+  value,
+  detail,
+  icon,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[24px] border border-[#e8ebe4] bg-[#fdfefb] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+      <div className="flex items-center gap-2 text-sm font-medium text-[#263328]">
+        <span className="flex size-6 items-center justify-center rounded-full bg-[#f0f5eb] text-[#2b6631]">
+          {icon}
+        </span>
+        {title}
+      </div>
+      <div className="mt-4 text-[2rem] font-semibold leading-none tracking-tight text-[#152319]">
+        {value}
+      </div>
+      <div className="mt-2 text-sm text-[#8a948b]">{detail}</div>
+    </div>
   );
 }
 
@@ -119,82 +144,93 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      <PageHeading
-        eyebrow="Cases"
-        title="Investigation cases"
-        description="Preserve addresses, linked alerts, ownership, and status in structured investigations."
-        actions={
-          <Button asChild>
+    <div className="space-y-5 pb-4 lg:space-y-6">
+      <section className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-[1.55rem] font-semibold tracking-tight text-[#162317] lg:text-[1.8rem]">
+            Investigation Cases
+          </h1>
+          <p className="mt-1 text-sm text-[#8a948b]">
+            Preserve decisions, assign ownership, and turn promising leads into a structured record.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="secondary" className="rounded-xl">
             <Link href="/alerts">
               Open alerts
               <ArrowRight className="size-4" />
             </Link>
           </Button>
-        }
-      />
+          <Button asChild className="rounded-xl">
+            <Link href="/graph">
+              Open graph
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </div>
+      </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <MetricCard
-          eyebrow="Open cases"
+      <section className="grid gap-4 xl:grid-cols-3">
+        <CaseMetric
+          title="Open cases"
           value={formatCount(openCases)}
-          description="Cases still being investigated or actively worked."
-          accent={<BriefcaseBusiness className="size-6" />}
+          detail="Active investigations still moving through review."
+          icon={<BriefcaseBusiness className="size-3.5" />}
         />
-        <MetricCard
-          eyebrow="Escalated"
+        <CaseMetric
+          title="Escalated"
           value={formatCount(escalatedCases)}
-          description="Investigations marked high concern or requiring urgent follow-up."
-          accent={<ShieldAlert className="size-6" />}
+          detail="Cases marked urgent or high concern."
+          icon={<ShieldAlert className="size-3.5" />}
         />
-        <MetricCard
-          eyebrow="Open flags"
+        <CaseMetric
+          title="Open flags"
           value={formatCount(openFlags)}
-          description="Triage items still unresolved across the visible case queue."
-          accent={<FolderPlus className="size-6" />}
+          detail="Unresolved triage items linked into the visible case queue."
+          icon={<FolderPlus className="size-3.5" />}
         />
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="text-[#132118]">Case queue</CardTitle>
-                <CardDescription>
-                  Saved investigations with counts for linked addresses and unresolved flags.
-                </CardDescription>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <select
-                  className={selectClassName}
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value)}
-                >
-                  <option value="all">All statuses</option>
-                  <option value="open">Open</option>
-                  <option value="monitoring">Monitoring</option>
-                  <option value="escalated">Escalated</option>
-                  <option value="closed">Closed</option>
-                </select>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void refreshCases(filter)}
-                  disabled={isPending}
-                >
-                  Refresh
-                </Button>
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.92fr)]">
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-base font-semibold text-[#1a271c]">Case queue</div>
+              <div className="mt-1 text-sm text-[#8a948b]">
+                Saved investigations ordered by the most recent movement.
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <select
+                className={selectClassName}
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              >
+                <option value="all">All statuses</option>
+                <option value="open">Open</option>
+                <option value="monitoring">Monitoring</option>
+                <option value="escalated">Escalated</option>
+                <option value="closed">Closed</option>
+              </select>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-xl border border-[#ecefe8] bg-[#f8f9f5] px-3 py-2 text-xs font-medium text-[#627165] transition hover:bg-white"
+                onClick={() => void refreshCases(filter)}
+              >
+                <Filter className="size-3" />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3">
             {cases.length ? (
               cases.map((item) => (
                 <Link
                   key={item.id}
                   href={`/cases/${item.id}`}
-                  className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
+                  className="block rounded-[24px] border border-[#ecefe8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -232,18 +268,17 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
                 No investigation cases match the current filter.
               </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-[#132118]">Open a new case</CardTitle>
-            <CardDescription>
-              Use this when an address cluster or alert thread deserves a saved investigation track.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form className="space-y-3" onSubmit={createCase}>
+        <div className="space-y-4">
+          <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+            <div className="text-base font-semibold text-[#1a271c]">Open a new case</div>
+            <div className="mt-1 text-sm text-[#8a948b]">
+              Start a structured investigation when an alert thread or address cluster deserves to be preserved.
+            </div>
+
+            <form className="mt-5 space-y-3" onSubmit={createCase}>
               <Input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
@@ -252,7 +287,7 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
               <Textarea
                 value={summary}
                 onChange={(event) => setSummary(event.target.value)}
-                placeholder="Working hypothesis, concern, or investigative scope."
+                placeholder="Working hypothesis, concern, or investigation scope."
               />
               <Input
                 value={owner}
@@ -269,7 +304,7 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
                 <option value="high">High priority</option>
                 <option value="critical">Critical priority</option>
               </select>
-              <Button type="submit" disabled={isPending}>
+              <Button type="submit" disabled={isPending} className="rounded-2xl">
                 {isPending ? (
                   <>
                     <LoaderCircle className="size-4 animate-spin" />
@@ -282,12 +317,24 @@ export function CasesSurface({ initialCases }: CasesSurfaceProps) {
             </form>
 
             {statusMessage ? (
-              <p className="rounded-[18px] border border-[#b8d6ad] bg-[#edf4e8] px-3 py-2 text-sm text-[#2b6631]">
+              <p className="mt-4 rounded-[18px] border border-[#b8d6ad] bg-[#edf4e8] px-3 py-2 text-sm text-[#2b6631]">
                 {statusMessage}
               </p>
             ) : null}
-          </CardContent>
-        </Card>
+          </div>
+
+          <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+            <div className="text-base font-semibold text-[#1a271c]">Case discipline</div>
+            <div className="mt-4 space-y-3 text-sm text-[#5d6a60]">
+              <p>
+                Keep the list short by opening a case only when you expect ongoing follow-up, ownership, or evidence capture.
+              </p>
+              <p>
+                Use alerts for fast triage and this page for investigations that need to persist beyond one review session.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   );

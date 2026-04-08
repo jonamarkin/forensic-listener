@@ -14,9 +14,9 @@ Fill in the personal course details below before the final submission upload.
 | Student ID | `[Insert student ID]` |
 | Course name / code | `[Insert course name and code]` |
 | Professor / supervisor | `[Insert professor name]` |
-| Submission date | `March 31, 2026` |
+| Submission date | `April 7, 2026` |
 | Repository URL | `https://github.com/jonamarkin/forensic-listener` |
-| Submitted commit | `4be5bd2` |
+| Submitted commit | `ef7324c` |
 
 **Project theme:** Ethereum forensic investigation system using polyglot persistence  
 **Primary academic focus:** database design, schema design, data modeling, indexing, and query architecture  
@@ -777,7 +777,9 @@ The Next.js frontend is organized by investigative surface:
 
 ### 15.3 Product Workflow Surfaces
 
+- overview dashboard: [`web/components/dashboard/overview-live-surface.tsx`](../web/components/dashboard/overview-live-surface.tsx)
 - triage workflow: [`web/components/dashboard/alerts-live-surface.tsx`](../web/components/dashboard/alerts-live-surface.tsx)
+- graph workspace: [`web/components/dashboard/graph-map.tsx`](../web/components/dashboard/graph-map.tsx)
 - case workflow: [`web/components/dashboard/cases-surface.tsx`](../web/components/dashboard/cases-surface.tsx)
 - case detail workflow: [`web/components/dashboard/case-detail-surface.tsx`](../web/components/dashboard/case-detail-surface.tsx)
 - dossier workbench: [`web/components/dashboard/case-workbench.tsx`](../web/components/dashboard/case-workbench.tsx)
@@ -847,12 +849,15 @@ This is the recommended route for a live demonstration to a lecturer or other
 external reviewer:
 
 1. Open **Overview** and explain that it is built from relational aggregates in
-   PostgreSQL plus live backend metrics.
+   PostgreSQL plus live backend metrics, including the time-windowed
+   transaction-history chart.
 2. Open **Alerts** and show that flags can be triaged rather than only viewed.
 3. Update a flag with status, assignee, note, and optional case link.
 4. Pivot into the linked **Account Dossier** and explain how notes, tags,
    counterparties, recent transactions, and behavior features are assembled.
-5. Open **Flow Canvas** and demonstrate graph tracing through Neo4j.
+5. Open **Flow Canvas** and demonstrate hop-based graph tracing through Neo4j.
+   If a neighborhood has not yet been materialized, explain that the interface
+   now falls back to a center node rather than appearing empty.
 6. Open a **Transaction Investigation** page and show linked flags and context.
 7. Open **Cases** and export a markdown **Case Report**.
 
@@ -895,13 +900,14 @@ manual workflow testing rather than a large automated test suite.
 | T3 | Health endpoint | Request `GET /health` | Returns API status JSON |
 | T4 | Recent transactions | Request `GET /transactions` | Returns recent transaction list |
 | T5 | Account dossier | Request `GET /accounts/{address}/profile` | Returns dossier with aggregates, tags, notes, and cases |
-| T6 | Graph trace | Request `GET /addresses/{address}/trace?...` | Returns bounded path if available |
-| T7 | Contract similarity | Request `GET /contracts/{address}/similar` | Returns nearest contract matches |
-| T8 | Case creation | `POST /cases` | New case is created and returned |
-| T9 | Alert triage | `POST /flags/{id}/triage` | Flag triage state is updated |
-| T10 | Transaction investigation | Open `/transactions/[hash]` | Transaction details and linked flags are shown |
-| T11 | Case export | Request `GET /cases/{id}/report` | Markdown report downloads |
-| T12 | Stream events | Request `GET /stream/events` | Snapshot stream is emitted |
+| T6 | Graph neighborhood | Request `GET /addresses/{address}/graph` | Returns a Neo4j neighborhood when available, otherwise a center-node fallback if the account exists in PostgreSQL |
+| T7 | Graph trace | Request `GET /addresses/{address}/trace?...` | Returns bounded path if available |
+| T8 | Contract similarity | Request `GET /contracts/{address}/similar` | Returns nearest contract matches |
+| T9 | Case creation | `POST /cases` | New case is created and returned |
+| T10 | Alert triage | `POST /flags/{id}/triage` | Flag triage state is updated |
+| T11 | Transaction investigation | Open `/transactions/[hash]` | Transaction details and linked flags are shown |
+| T12 | Case export | Request `GET /cases/{id}/report` | Markdown report downloads |
+| T13 | Stream events | Request `GET /stream/events` | Snapshot stream is emitted |
 
 ### 18.2 Verification Performed During Development
 
@@ -955,7 +961,7 @@ The current implementation has several important limitations.
 
 ### 20.1 Product Limitations
 
-- entity coverage is still limited to a relatively small curated seed set
+- curated reference coverage is still limited even though blockchain activity is ingested live
 - watchlists and saved-search workflows are not yet implemented
 - user authentication and authorization are not yet implemented
 - multi-user collaboration is not yet implemented
@@ -966,7 +972,7 @@ The current implementation has several important limitations.
 - forensic flags are heuristic signals, not proof
 - behavior similarity indicates resemblance, not identity
 - contract similarity indicates bytecode resemblance, not intent
-- graph completeness depends on ingestion completeness
+- graph completeness depends on Neo4j ingestion completeness; when a neighborhood is missing, the interface falls back to a center node only
 
 ### 20.3 Engineering Limitations
 
@@ -1040,7 +1046,7 @@ become clearer.
 ### 23.1 Repository Traceability
 
 - canonical repository URL: `https://github.com/jonamarkin/forensic-listener`
-- submitted commit for this report snapshot: `4be5bd2`
+- submitted commit for this report snapshot: `ef7324c`
 
 ### Backend
 

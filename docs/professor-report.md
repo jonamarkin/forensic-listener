@@ -10,9 +10,9 @@
 | Student ID | `[Insert student ID]` |
 | Course name / code | `[Insert course name and code]` |
 | Professor / supervisor | `[Insert professor name]` |
-| Submission date | `March 31, 2026` |
+| Submission date | `April 7, 2026` |
 | Repository URL | `https://github.com/jonamarkin/forensic-listener` |
-| Submitted commit | `4be5bd2` |
+| Submitted commit | `ef7324c` |
 
 ---
 
@@ -32,9 +32,9 @@ The final design uses:
 - **pgvector** inside PostgreSQL for contract and behavior similarity
 
 The implementation consists of a Go backend for ingestion and API delivery, and
-a Next.js frontend for analyst workflows. The current system supports account
-dossiers, alert triage, graph tracing, contract similarity, transaction
-inspection, and case management.
+a Next.js frontend for analyst workflows. The current system supports an
+interactive overview dashboard, alert triage, account dossiers, hop-based graph
+tracing, contract similarity, transaction investigation, and case management.
 
 The system ingests live Ethereum transaction data through a WebSocket feed. In
 addition, it bootstraps a small curated known-entity reference set so that
@@ -123,15 +123,16 @@ flowchart LR
 | Graph store | Multi-hop paths, hubs, circular flows | [`store/neo4j.go`](../store/neo4j.go) |
 | Vector search | Contract and behavior similarity | [`store/vector.go`](../store/vector.go) |
 | API | Exposes routes for frontend and tools | [`api/server.go`](../api/server.go) |
-| Frontend | Overview, alerts, graph, cases, dossiers | [`web/app/`](../web/app) |
+| Frontend | Overview, alerts, graph, cases, dossiers, contracts, transactions | [`web/app/`](../web/app) |
 
 ### 3.3 Important Implemented Product Surfaces
 
-- **Overview**: system metrics and recent activity
-- **Alerts**: forensic flags and triage workflow
-- **Graph**: address tracing and circular-flow analysis
-- **Accounts**: dossier view with notes, tags, counterparties, and behavior
+- **Overview**: interactive dashboard with time-windowed transaction history and recent activity
+- **Alerts**: forensic flags with triage status, assignee, notes, and case linking
+- **Graph**: hop-based address tracing via Neo4j, with a center-node fallback when no neighborhood has been materialized yet
+- **Accounts**: dossier view with notes, tags, counterparties, cases, and behavior similarity
 - **Transactions**: transaction detail and linked flags
+- **Contracts**: contract intelligence and similarity search
 - **Cases**: investigation workflow and report export
 
 ---
@@ -358,12 +359,13 @@ erDiagram
 | T2 | Frontend build | Run `pnpm build` in `web/` | Frontend compiles successfully |
 | T3 | Health route | Request `GET /health` | Returns API status JSON |
 | T4 | Account dossier | Request `GET /accounts/{address}/profile` | Returns account aggregates, notes, tags, and cases |
-| T5 | Graph trace | Request `GET /addresses/{address}/trace?...` | Returns bounded path if available |
-| T6 | Alert triage | Request `POST /flags/{id}/triage` | Triage state is stored |
-| T7 | Case creation | Request `POST /cases` | New case is created |
-| T8 | Case export | Request `GET /cases/{id}/report` | Markdown report downloads |
-| T9 | Contract similarity | Request `GET /contracts/{address}/similar` | Similar contracts are returned |
-| T10 | Transaction investigation | Open `/transactions/[hash]` | Transaction detail and linked flags are shown |
+| T5 | Graph neighborhood | Request `GET /addresses/{address}/graph` | Returns a Neo4j neighborhood when available, otherwise a center-node fallback if the account exists in PostgreSQL |
+| T6 | Graph trace | Request `GET /addresses/{address}/trace?...` | Returns bounded path if available |
+| T7 | Alert triage | Request `POST /flags/{id}/triage` | Triage state is stored |
+| T8 | Case creation | Request `POST /cases` | New case is created |
+| T9 | Case export | Request `GET /cases/{id}/report` | Markdown report downloads |
+| T10 | Contract similarity | Request `GET /contracts/{address}/similar` | Similar contracts are returned |
+| T11 | Transaction investigation | Open `/transactions/[hash]` | Transaction detail and linked flags are shown |
 
 ---
 
@@ -371,11 +373,12 @@ erDiagram
 
 ### 8.1 Current Limitations
 
-- entity coverage is still limited to a seeded dataset
+- curated reference coverage is still limited even though transaction activity is ingested live
 - watchlists and saved searches are not yet implemented
 - authentication and role-based access control are not yet implemented
 - multi-user collaboration is not yet implemented
 - graph clustering beyond single-address tracing is not yet implemented
+- graph completeness still depends on Neo4j ingestion; when a neighborhood is missing, the interface falls back to a center node only
 - automated tests and formal query benchmarks are still limited
 - forensic flags and similarity outputs are heuristic, not definitive proof
 

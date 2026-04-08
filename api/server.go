@@ -445,9 +445,10 @@ func (s *Server) handleAddressGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	address := chi.URLParam(r, "address")
 	graph, err := s.graph.AddressGraph(
 		r.Context(),
-		chi.URLParam(r, "address"),
+		address,
 		parseDepth(r),
 		parseLimit(r, 50, 200),
 	)
@@ -456,14 +457,53 @@ func (s *Server) handleAddressGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if graph == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "address graph not found"})
-		return
+		graph, err = s.fallbackAddressGraph(r.Context(), address)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if graph == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "address graph not found"})
+			return
+		}
 	}
 	if err := s.enrichAddressGraph(r.Context(), graph); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, graph)
+}
+
+func (s *Server) fallbackAddressGraph(ctx context.Context, address string) (*models.AddressGraph, error) {
+	if s.pg == nil {
+		return nil, nil
+	}
+
+	profile, err := s.pg.GetAccountProfile(ctx, address)
+	if err != nil {
+		var notFoundErr *store.NotFoundError
+		if errors.As(err, &notFoundErr) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &models.AddressGraph{
+		Center: profile.Address,
+		Nodes: []models.GraphNode{
+			{
+				ID:         profile.Address,
+				Label:      profile.Address,
+				IsContract: profile.IsContract,
+				EntityType: profile.EntityType,
+				EntityName: profile.EntityName,
+				RiskLevel:  profile.RiskLevel,
+				IsHub:      profile.IsHub,
+				Degree:     0,
+			},
+		},
+		Edges: []models.GraphEdge{},
+	}, nil
 }
 
 func (s *Server) handleAddressTrace(w http.ResponseWriter, r *http.Request) {

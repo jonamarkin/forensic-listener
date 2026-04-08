@@ -6,7 +6,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   BriefcaseBusiness,
-  Filter,
+  Download,
   MoreHorizontal,
   Network,
   ShieldAlert,
@@ -36,6 +36,16 @@ import {
 } from "@/lib/utils";
 
 const ANALYTICS_REFRESH_MS = 20_000;
+const HISTORY_WINDOWS = [
+  { label: "24H", hours: 24 },
+  { label: "72H", hours: 72 },
+  { label: "1W", hours: 168 },
+] as const;
+const ACTIVITY_WINDOWS = [
+  { label: "1H", hours: 1 },
+  { label: "6H", hours: 6 },
+  { label: "24H", hours: 24 },
+] as const;
 
 type OverviewLiveSurfaceProps = {
   initialOverview: OverviewStats | null;
@@ -100,6 +110,42 @@ function buildPoints(values: number[], width: number, height: number, padding: n
   });
 }
 
+function compressMetrics(
+  points: NetworkMetricPoint[],
+  targetCount: number,
+): NetworkMetricPoint[] {
+  if (points.length <= targetCount) {
+    return points;
+  }
+
+  const result: NetworkMetricPoint[] = [];
+  for (let index = 0; index < targetCount; index += 1) {
+    const start = Math.floor((index / targetCount) * points.length);
+    const end = Math.floor(((index + 1) / targetCount) * points.length);
+    const slice = points.slice(start, Math.max(start + 1, end));
+    const bucket = slice.at(-1)?.bucket || points[Math.min(points.length - 1, start)]?.bucket;
+    const transactionCount = slice.reduce(
+      (sum, point) => sum + point.transaction_count,
+      0,
+    );
+    const uniqueAddresses = Math.round(
+      slice.reduce((sum, point) => sum + point.unique_addresses, 0) /
+        Math.max(slice.length, 1),
+    );
+    const totalValue = sumWei(slice.map((point) => point.total_value)).toString();
+
+    result.push({
+      bucket: bucket || "",
+      transaction_count: transactionCount,
+      unique_addresses: uniqueAddresses,
+      avg_gas_price: slice.at(-1)?.avg_gas_price || "0",
+      total_value: totalValue,
+    });
+  }
+
+  return result;
+}
+
 function OverviewTrendChart({
   primary,
   secondary,
@@ -119,12 +165,12 @@ function OverviewTrendChart({
       : new Array(safePrimary.length).fill(0);
   const primaryPoints = buildPoints(safePrimary, width, height, padding);
   const secondaryPoints = buildPoints(safeSecondary, width, height, padding);
-  const selectedIndex = Math.min(
-    safePrimary.length - 1,
-    Math.max(0, Math.floor(safePrimary.length * 0.42)),
+  const [selectedIndex, setSelectedIndex] = useState(
+    Math.max(0, safePrimary.length - 1),
   );
-  const selectedPrimary = primaryPoints[selectedIndex];
-  const selectedSecondary = secondaryPoints[selectedIndex];
+  const clampedSelectedIndex = Math.min(selectedIndex, safePrimary.length - 1);
+  const selectedPrimary = primaryPoints[clampedSelectedIndex];
+  const selectedSecondary = secondaryPoints[clampedSelectedIndex];
   const area = [
     `${padding},${height - padding}`,
     ...primaryPoints.map((point) => `${point.x},${point.y}`),
@@ -145,17 +191,17 @@ function OverviewTrendChart({
 
       <div>
         <div className="relative h-[250px] overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,rgba(251,252,249,0.7),rgba(246,248,242,0.9))]">
-          <div
-            className="pointer-events-none absolute z-10 rounded-[18px] border border-[#e8ede5] bg-white px-3 py-2 shadow-[0_16px_35px_rgba(25,40,26,0.09)]"
-            style={{
-              left: `${(selectedPrimary.x / width) * 100}%`,
-              top: `${Math.max(14, selectedPrimary.y - 76)}px`,
-              transform: "translateX(-35%)",
-            }}
-          >
-            <div className="text-[11px] font-medium text-[#7b887d]">
-              {labels[selectedIndex] || "Current window"}
-            </div>
+        <div
+          className="pointer-events-none absolute z-10 rounded-[18px] border border-[#e8ede5] bg-white px-3 py-2 shadow-[0_16px_35px_rgba(25,40,26,0.09)]"
+          style={{
+            left: `${(selectedPrimary.x / width) * 100}%`,
+            top: `${Math.max(14, selectedPrimary.y - 76)}px`,
+            transform: "translateX(-35%)",
+          }}
+        >
+          <div className="text-[11px] font-medium text-[#7b887d]">
+            {labels[clampedSelectedIndex] || "Current window"}
+          </div>
             <div className="mt-2 space-y-1 text-xs">
               <div className="flex items-center justify-between gap-6">
                 <span className="flex items-center gap-2 text-[#556357]">
@@ -183,6 +229,18 @@ function OverviewTrendChart({
             className="h-full w-full"
             preserveAspectRatio="none"
             aria-label="Transactions and unique addresses over time"
+            onMouseLeave={() => setSelectedIndex(Math.max(0, safePrimary.length - 1))}
+            onMouseMove={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              if (!rect.width) {
+                return;
+              }
+              const ratio = (event.clientX - rect.left) / rect.width;
+              const nextIndex = Math.round(
+                Math.min(Math.max(ratio, 0), 1) * (safePrimary.length - 1),
+              );
+              setSelectedIndex(nextIndex);
+            }}
           >
             <defs>
               <linearGradient id="overview-primary-fill" x1="0" x2="0" y1="0" y2="1">
@@ -317,6 +375,8 @@ export function OverviewLiveSurface({
   const [recentFlags, setRecentFlags] = useState(initialRecentFlags);
   const [recentContracts, setRecentContracts] = useState(initialRecentContracts);
   const [networkMetrics, setNetworkMetrics] = useState(initialNetworkMetrics);
+  const [historyWindowHours, setHistoryWindowHours] = useState<number>(24);
+  const [activityWindowHours, setActivityWindowHours] = useState<number>(24);
 
   useEffect(() => {
     if (!snapshot) {
@@ -339,12 +399,14 @@ export function OverviewLiveSurface({
     });
   }, [snapshot]);
 
-  const refreshAnalytics = useCallback(async () => {
+  const refreshAnalytics = useCallback(async (hours = historyWindowHours) => {
     try {
       const [nextTopAddresses, nextRecentContracts, nextNetworkMetrics] = await Promise.all([
         clientApiFetch<AddressActivity[]>("/addresses/top?limit=6"),
         clientApiFetch<ContractSummary[]>("/contracts/recent?limit=6"),
-        clientApiFetch<NetworkMetricPoint[]>("/stats/network?hours=24&bucket=hour"),
+        clientApiFetch<NetworkMetricPoint[]>(
+          `/stats/network?hours=${hours}&bucket=hour`,
+        ),
       ]);
 
       startTransition(() => {
@@ -355,17 +417,21 @@ export function OverviewLiveSurface({
     } catch {
       // Preserve the last stable snapshot during demo sessions.
     }
-  }, []);
+  }, [historyWindowHours]);
+
+  useEffect(() => {
+    void refreshAnalytics(historyWindowHours);
+  }, [historyWindowHours, refreshAnalytics]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void refreshAnalytics();
+      void refreshAnalytics(historyWindowHours);
     }, ANALYTICS_REFRESH_MS);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [refreshAnalytics]);
+  }, [historyWindowHours, refreshAnalytics]);
 
   const queueDepth =
     (enrichment?.pending || 0) +
@@ -408,7 +474,7 @@ export function OverviewLiveSurface({
     Math.max(recentFlags.length - highSeverityCount, 0),
   );
 
-  const chartWindow = networkMetrics.slice(-8);
+  const chartWindow = compressMetrics(networkMetrics, 8);
   const chartPrimary = chartWindow.map((point) => point.transaction_count);
   const chartSecondary = chartWindow.map((point) => point.unique_addresses);
   const chartLabels = chartWindow.map((point) =>
@@ -433,6 +499,32 @@ export function OverviewLiveSurface({
   const contractFocusShare = recentContracts.length
     ? (flaggedContracts / recentContracts.length) * 100
     : 0;
+  const visibleRecentTransactions = recentTransactions.filter((tx) => {
+    const timestamp = new Date(tx.timestamp).getTime();
+    if (Number.isNaN(timestamp)) {
+      return false;
+    }
+    return Date.now() - timestamp <= activityWindowHours * 60 * 60 * 1000;
+  });
+
+  function exportHistoryCsv() {
+    const header = "bucket,transaction_count,unique_addresses,total_value\n";
+    const rows = networkMetrics
+      .map(
+        (point) =>
+          `${point.bucket},${point.transaction_count},${point.unique_addresses},${point.total_value}`,
+      )
+      .join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `forensic-network-history-${historyWindowHours}h.csv`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-5 pb-4 lg:space-y-6">
@@ -448,16 +540,17 @@ export function OverviewLiveSurface({
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="rounded-xl border border-[#e7eae3] bg-[#f7f8f4] px-3 py-2 text-xs font-medium text-[#4f5c51]">
-            Last 24 Hours
+            Last {historyWindowHours} Hours
           </div>
           <div className="rounded-xl border border-[#e7eae3] bg-[#fbfcf8] px-3 py-2 text-xs font-medium text-[#4f5c51]">
             {formatWindowLabel(firstBucket)} - {formatWindowLabel(lastBucket)}
           </div>
           <button
             type="button"
+            onClick={exportHistoryCsv}
             className="inline-flex items-center gap-1 rounded-xl border border-[#e7eae3] bg-[#fbfcf8] px-3 py-2 text-xs font-medium text-[#4f5c51] transition hover:bg-white"
           >
-            <Filter className="size-3.5" />
+            <Download className="size-3.5" />
             Export
           </button>
         </div>
@@ -551,8 +644,8 @@ export function OverviewLiveSurface({
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.62fr)_minmax(300px,0.86fr)]">
-        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.62fr)_minmax(300px,0.86fr)] xl:items-start">
+        <div className="self-start rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="text-base font-semibold text-[#1a271c]">Transaction History</div>
@@ -561,20 +654,23 @@ export function OverviewLiveSurface({
               </div>
             </div>
             <div className="flex items-center gap-1 rounded-xl border border-[#ecefe8] bg-[#f8f9f5] p-1 text-[11px] font-medium text-[#627165]">
-              {["24H", "72H", "1W"].map((item, index) => (
-                <span
-                  key={item}
+              {HISTORY_WINDOWS.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setHistoryWindowHours(item.hours)}
                   className={cn(
-                    "rounded-lg px-2.5 py-1.5",
-                    index === 0 ? "bg-white text-[#1f2c20] shadow-sm" : "",
+                    "rounded-lg px-2.5 py-1.5 transition",
+                    historyWindowHours === item.hours
+                      ? "bg-white text-[#1f2c20] shadow-sm"
+                      : "hover:bg-white/70",
                   )}
                 >
-                  {item}
-                </span>
+                  {item.label}
+                </button>
               ))}
-              <span className="ml-1 flex items-center gap-1 rounded-lg px-2.5 py-1.5">
-                <Filter className="size-3" />
-                Filter
+              <span className="ml-1 rounded-lg px-2.5 py-1.5 text-[#8a948b]">
+                Hover to inspect
               </span>
             </div>
           </div>
@@ -588,7 +684,7 @@ export function OverviewLiveSurface({
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+        <div className="self-start rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-base font-semibold text-[#1a271c]">Risk Flow</div>
@@ -668,7 +764,7 @@ export function OverviewLiveSurface({
 
           <div className="mt-8 rounded-[22px] border border-[#ecefe8] bg-[#f6f7f3] p-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#95a094]">
-              Next best pivot
+              Priority node
             </div>
             <div className="mt-2 text-sm font-medium text-[#1c2a1d]">
               {topAddress
@@ -688,24 +784,27 @@ export function OverviewLiveSurface({
           <div>
             <div className="text-base font-semibold text-[#1a271c]">Recent Activity</div>
             <div className="mt-1 text-sm text-[#8a948b]">
-              Latest ledger events with direct pivots into transactions and dossiers.
+              Latest ledger events in the selected window.
             </div>
           </div>
           <div className="flex items-center gap-1 rounded-xl border border-[#ecefe8] bg-[#f8f9f5] p-1 text-[11px] font-medium text-[#627165]">
-            {["1H", "6H", "24H"].map((item, index) => (
-              <span
-                key={item}
+            {ACTIVITY_WINDOWS.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => setActivityWindowHours(item.hours)}
                 className={cn(
-                  "rounded-lg px-2.5 py-1.5",
-                  index === 2 ? "bg-white text-[#1f2c20] shadow-sm" : "",
+                  "rounded-lg px-2.5 py-1.5 transition",
+                  activityWindowHours === item.hours
+                    ? "bg-white text-[#1f2c20] shadow-sm"
+                    : "hover:bg-white/70",
                 )}
               >
-                {item}
-              </span>
+                {item.label}
+              </button>
             ))}
-            <span className="ml-1 flex items-center gap-1 rounded-lg px-2.5 py-1.5">
-              <Filter className="size-3" />
-              Filter
+            <span className="ml-1 rounded-lg px-2.5 py-1.5 text-[#8a948b]">
+              {visibleRecentTransactions.length} rows
             </span>
           </div>
         </div>
@@ -724,8 +823,8 @@ export function OverviewLiveSurface({
                 </tr>
               </thead>
               <tbody>
-                {recentTransactions.length ? (
-                  recentTransactions.map((tx) => {
+                {visibleRecentTransactions.length ? (
+                  visibleRecentTransactions.map((tx) => {
                     const relatedFlag = relatedFlagByHash.get(tx.hash);
                     const typeLabel = tx.to ? "Transfer" : "Deploy";
                     const statusLabel = relatedFlag
@@ -791,7 +890,7 @@ export function OverviewLiveSurface({
                 ) : (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-sm text-[#8a948b]">
-                      No recent activity is available from the backend yet.
+                      No recent activity is available in the selected window yet.
                     </td>
                   </tr>
                 )}
