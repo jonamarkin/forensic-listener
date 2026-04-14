@@ -146,13 +146,14 @@ function OverviewTrendChart({
   primary,
   secondary,
   labels,
+  height = 360,
 }: {
   primary: number[];
   secondary: number[];
   labels: string[];
+  height?: number;
 }) {
   const width = 760;
-  const height = 250;
   const padding = 22;
   const safePrimary = primary.length ? primary : [0, 0, 0, 0];
   const safeSecondary =
@@ -167,6 +168,11 @@ function OverviewTrendChart({
   const clampedSelectedIndex = Math.min(selectedIndex, safePrimary.length - 1);
   const selectedPrimary = primaryPoints[clampedSelectedIndex];
   const selectedSecondary = secondaryPoints[clampedSelectedIndex];
+  const tooltipWidth = 188;
+  const tooltipLeft = Math.min(
+    Math.max(selectedPrimary.x - tooltipWidth / 2, 12),
+    width - tooltipWidth - 12,
+  );
   const area = [
     `${padding},${height - padding}`,
     ...primaryPoints.map((point) => `${point.x},${point.y}`),
@@ -179,20 +185,25 @@ function OverviewTrendChart({
 
   return (
     <div className="grid gap-4 lg:grid-cols-[38px_minmax(0,1fr)]">
-      <div className="flex h-[250px] flex-col justify-between pt-1 text-[11px] text-[#abb2a9]">
+      <div
+        className="flex flex-col justify-between pt-1 text-[11px] text-[#abb2a9]"
+        style={{ height }}
+      >
         {yLabels.map((label) => (
           <span key={label}>{label}</span>
         ))}
       </div>
 
       <div>
-        <div className="relative h-[250px] overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,rgba(251,252,249,0.7),rgba(246,248,242,0.9))]">
+        <div
+          className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,rgba(251,252,249,0.7),rgba(246,248,242,0.9))]"
+          style={{ height }}
+        >
         <div
           className="pointer-events-none absolute z-10 rounded-[18px] border border-[#e8ede5] bg-white px-3 py-2 shadow-[0_16px_35px_rgba(25,40,26,0.09)]"
           style={{
-            left: `${(selectedPrimary.x / width) * 100}%`,
+            left: `${(tooltipLeft / width) * 100}%`,
             top: `${Math.max(14, selectedPrimary.y - 76)}px`,
-            transform: "translateX(-35%)",
           }}
         >
           <div className="text-[11px] font-medium text-[#7b887d]">
@@ -619,8 +630,8 @@ export function OverviewLiveSurface({
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.62fr)_minmax(300px,0.86fr)] xl:items-start">
-        <div className="self-start rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.62fr)_minmax(300px,0.86fr)] xl:items-stretch">
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)] xl:flex xl:h-full xl:flex-col">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="text-base font-semibold text-[#1a271c]">Transaction History</div>
@@ -650,16 +661,17 @@ export function OverviewLiveSurface({
             </div>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-5 xl:flex-1">
             <OverviewTrendChart
               primary={chartPrimary}
               secondary={chartSecondary}
               labels={chartLabels}
+              height={500}
             />
           </div>
         </div>
 
-        <div className="self-start rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)] xl:h-full">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-base font-semibold text-[#1a271c]">Recent Forensic Flags</div>
