@@ -36,6 +36,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 
+  if (pathname === "/" || pathname === "/login") {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen text-[#132118]">
       <div className="flex min-h-screen w-full items-start gap-4 px-3 py-4 sm:px-4 sm:py-5 lg:gap-5 lg:px-5 lg:py-6 xl:px-6">
@@ -93,25 +97,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </div>
 
-          <div className="mt-auto rounded-[24px] border border-[#e5e9e1] bg-white/68 p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#92a091]">
-              Workspace status
-            </div>
-            <div className="mt-3 space-y-2 text-sm text-[#58675a]">
-              <div className="flex items-center justify-between gap-3">
-                <span>Sidebar mode</span>
-                <span className="font-medium text-[#1f2d21]">Pinned</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span>Node feed</span>
-                <span className="font-medium text-[#2b6631]">Live</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span>Similarity</span>
-                <span className="font-medium text-[#1f2d21]">Ready</span>
-              </div>
-            </div>
-          </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col rounded-[32px] border border-[#e5e9e1] bg-[linear-gradient(180deg,rgba(252,252,249,0.98),rgba(247,248,244,0.96))] px-4 py-4 shadow-[0_30px_80px_rgba(28,41,26,0.075)] sm:px-5 lg:px-6 xl:px-7">

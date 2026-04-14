@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Fingerprint, ScanSearch } from "lucide-react";
+import { ArrowRight, ScanSearch } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,7 +73,7 @@ export default async function ContractsLandingPage() {
             <div className="flex flex-wrap gap-3">
               <Button
                 asChild
-                className="bg-white text-[#16361b] hover:bg-[#f3f7ef]"
+                className="!bg-white !text-[#16361b] hover:!bg-[#f3f7ef]"
               >
                 <Link href="/graph">
                   Open graph
@@ -113,7 +113,7 @@ export default async function ContractsLandingPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_360px]">
+      <section>
         <Card>
           <CardHeader className="space-y-4">
             <div className="flex items-center gap-2 text-[#2b6631]">
@@ -164,22 +164,6 @@ export default async function ContractsLandingPage() {
             )}
           </CardContent>
         </Card>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <Fingerprint className="size-5" />
-                <CardTitle className="text-[#132118]">What this page shows</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-[#556357]">
-              <p>Each contract is an address marked `is_contract = true` after the backend finds bytecode at that address.</p>
-              <p>Flagged rows indicate contract bytecode that closely resembles another stored contract.</p>
-              <p>Open a contract to inspect bytecode, metadata, and pgvector nearest neighbors.</p>
-            </CardContent>
-          </Card>
-        </div>
       </section>
     </div>
   );
