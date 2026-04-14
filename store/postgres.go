@@ -54,7 +54,6 @@ func (p *Postgres) Close() {
 }
 
 // UpsertAccount inserts an account or updates last_seen on conflict.
-// Called before every transaction insert to satisfy the foreign key constraint.
 func (p *Postgres) UpsertAccount(ctx context.Context, address string, isContract bool) error {
 	address = NormalizeAddress(address)
 	if address == "" {

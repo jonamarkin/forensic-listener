@@ -3,7 +3,6 @@ package store
 import "fmt"
 
 // NotFoundError is returned when a requested record does not exist.
-// Callers can check: errors.As(err, &store.NotFoundError{})
 type NotFoundError struct {
 	Resource string
 	ID       string
