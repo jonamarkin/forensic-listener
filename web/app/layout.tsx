@@ -19,7 +19,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Forensic Listener",
-  description: "Ethereum investigation workspace for tracing, triage, and case review.",
+  description: "Ethereum investigation workspace for tracing flows and comparing activity.",
 };
 
 export default function RootLayout({

@@ -34,12 +34,6 @@ type ForensicFlag struct {
 	Severity     string     `json:"severity"`
 	Description  string     `json:"description"`
 	DetectedAt   time.Time  `json:"detected_at"`
-	TriageStatus string     `json:"triage_status,omitempty"`
-	Assignee     string     `json:"assignee,omitempty"`
-	AnalystNote  string     `json:"analyst_note,omitempty"`
-	CaseID       *int64     `json:"case_id,omitempty"`
-	CaseTitle    string     `json:"case_title,omitempty"`
-	ReviewedAt   *time.Time `json:"reviewed_at,omitempty"`
 	WhyFlagged   string     `json:"why_flagged,omitempty"`
 	TriggerLogic string     `json:"trigger_logic,omitempty"`
 	Confidence   string     `json:"confidence,omitempty"`

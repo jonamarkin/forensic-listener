@@ -2,14 +2,12 @@ import Link from "next/link";
 import {
   ArrowRight,
   Brain,
-  BriefcaseBusiness,
   FileCode2,
   Flag,
   Network,
   Waves,
 } from "lucide-react";
 
-import { CaseWorkbench } from "@/components/dashboard/case-workbench";
 import { LineChart } from "@/components/dashboard/line-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,18 +23,15 @@ import type {
   AccountBehaviorProfile,
   AccountProfile,
   AccountVelocityPoint,
-  InvestigationCaseSummary,
   SimilarAccountMatch,
 } from "@/lib/types";
 import {
-  caseStatusTone,
   entityTone,
   formatAddress,
   formatCount,
   formatDateTime,
   formatSimilarity,
   formatWeiToEth,
-  priorityTone,
   riskTone,
 } from "@/lib/utils";
 
@@ -85,7 +80,7 @@ export default async function AccountPage({
 }) {
   const { address } = await params;
 
-  const [profile, behavior, similar, velocity, cases] = await Promise.all([
+  const [profile, behavior, similar, velocity] = await Promise.all([
     maybeApiFetch<AccountProfile>(`/accounts/${encodeURIComponent(address)}/profile`),
     maybeApiFetch<AccountBehaviorProfile>(
       `/accounts/${encodeURIComponent(address)}/behavior`,
@@ -96,7 +91,6 @@ export default async function AccountPage({
     maybeApiFetch<AccountVelocityPoint[]>(
       `/accounts/${encodeURIComponent(address)}/velocity?hours=72&bucket=hour`,
     ),
-    maybeApiFetch<InvestigationCaseSummary[]>("/cases?limit=24"),
   ]);
 
   if (!profile) {
@@ -105,7 +99,7 @@ export default async function AccountPage({
         <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
             <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[#6c796f]">
-              Account Dossier
+              Account Profile
             </p>
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#132118] sm:text-4xl">
@@ -139,9 +133,6 @@ export default async function AccountPage({
       return sum;
     }
   }, BigInt(0));
-  const openCases = profile.cases.filter(
-    (item) => item.status.toLowerCase() !== "closed",
-  ).length;
   const topCounterparties = profile.counterparties.slice(0, 4);
   const recentTransactions = profile.recent_transactions.slice(0, 4);
   const similarMatches = (similar || []).slice(0, 4);
@@ -151,7 +142,7 @@ export default async function AccountPage({
       <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div className="space-y-4">
           <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[#6c796f]">
-            Account Dossier
+            Account Profile
           </p>
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -171,8 +162,8 @@ export default async function AccountPage({
               </h1>
               <p className="max-w-3xl text-sm leading-7 text-[#59675d]">
                 Investigator-facing view for lifecycle, counterparties, recent
-                transactions, behavioral similarity, and case activity tied to this
-                Ethereum address.
+                transactions, graph context, and behavioral similarity tied to
+                this Ethereum address.
               </p>
             </div>
             <div className="rounded-[24px] border border-[#dbe3d8] bg-white/78 px-4 py-3">
@@ -193,7 +184,7 @@ export default async function AccountPage({
           {profile.is_contract ? (
             <Button asChild variant="secondary">
               <Link href={`/contracts/${encodeURIComponent(profile.address)}`}>
-                Contract intelligence
+                Contract analysis
                 <FileCode2 className="size-4" />
               </Link>
             </Button>
@@ -219,14 +210,14 @@ export default async function AccountPage({
           detail={`${formatCount(profile.flag_count)} flags total`}
         />
         <DossierMetric
-          label="Open cases"
-          value={formatCount(openCases)}
-          detail={`${formatCount(profile.cases.length)} linked investigations`}
+          label="Counterparties"
+          value={formatCount(profile.counterparties.length)}
+          detail={`${formatWeiToEth(totalCounterpartyValue.toString())} observed value`}
         />
         <DossierMetric
-          label="Counterparty value"
-          value={formatWeiToEth(totalCounterpartyValue.toString())}
-          detail={`${formatCount(profile.counterparties.length)} counterparties`}
+          label="Total sent"
+          value={formatWeiToEth(profile.total_sent)}
+          detail={`${formatCount(profile.sent_count)} outbound transfers`}
         />
       </section>
 
@@ -254,66 +245,15 @@ export default async function AccountPage({
               </div>
               <div className="rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4">
                 <div className="text-sm font-semibold text-[#132118]">
-                  Investigation posture
+                  Classification
                 </div>
                 <div className="mt-3 space-y-2 text-sm text-[#566357]">
                   <div>Entity label: {profile.entity_name || "Unlabeled"}</div>
                   <div>Risk level: {profile.risk_level || "Unknown"}</div>
-                  <div>
-                    Notes recorded: {formatCount(profile.notes.length)} · Tags:{" "}
-                    {formatCount(profile.tags.length)}
-                  </div>
+                  <div>Contract account: {profile.is_contract ? "yes" : "no"}</div>
                   <div>{profile.is_hub ? "High-degree hub behavior observed." : "No hub designation currently stored."}</div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <BriefcaseBusiness className="size-5" />
-                <CardTitle className="text-[#132118]">Linked investigations</CardTitle>
-              </div>
-              <CardDescription>
-                Cases linked to this address.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {profile.cases.length ? (
-                profile.cases.slice(0, 3).map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/cases/${item.id}`}
-                    className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-[#132118]">
-                          {item.title}
-                        </div>
-                        <div className="mt-1 text-sm text-[#5f6b61]">
-                          {item.summary || "No summary recorded yet."}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className={caseStatusTone(item.status)}>{item.status}</Badge>
-                        <Badge className={priorityTone(item.priority)}>{item.priority}</Badge>
-                      </div>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
-                  This address is not linked to an investigation yet.
-                </div>
-              )}
-              {profile.cases.length > 3 ? (
-                <div className="text-xs text-[#6b786d]">
-                  {profile.cases.length - 3} more linked cases are available in the
-                  workbench below.
-                </div>
-              ) : null}
             </CardContent>
           </Card>
 
@@ -539,31 +479,6 @@ export default async function AccountPage({
               </div>
             </CardContent>
           </Card>
-
-          <details className="group overflow-hidden rounded-[30px] border border-[#dbe3d8] bg-white/82">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
-              <div>
-                <div className="text-sm font-semibold text-[#132118]">
-                  Case workbench and notes
-                </div>
-                <div className="mt-1 text-sm text-[#617065]">
-                  Tags, notes, and case links.
-                </div>
-              </div>
-              <span className="rounded-full border border-[#d7e2d0] bg-[#f7faf4] px-3 py-1 text-xs font-medium text-[#2b6631] transition group-open:bg-[#e6f0df]">
-                Expand
-              </span>
-            </summary>
-            <div className="border-t border-[#e2e8dd] p-3">
-              <CaseWorkbench
-                address={profile.address}
-                initialNotes={profile.notes}
-                initialTags={profile.tags}
-                initialCases={profile.cases}
-                availableCases={cases || []}
-              />
-            </div>
-          </details>
         </div>
       </section>
     </div>

@@ -85,7 +85,7 @@ export default async function ContractPage({
         <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
             <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[#6c796f]">
-              Contract Intelligence
+              Contract Analysis
             </p>
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#132118] sm:text-4xl">
@@ -113,7 +113,7 @@ export default async function ContractPage({
       <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div className="space-y-4">
           <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[#6c796f]">
-            Contract Intelligence
+            Contract Analysis
           </p>
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -138,8 +138,7 @@ export default async function ContractPage({
                 {detail.entity_name || formatAddress(detail.address, 10)}
               </h1>
               <p className="max-w-3xl text-sm leading-7 text-[#59675d]">
-                Contract-focused view for bytecode, verification posture, source
-                artifacts, and nearest-neighbor similarity from pgvector.
+                Contract-focused view for bytecode, stored metadata, and nearest-neighbor similarity from pgvector.
               </p>
             </div>
             <div className="rounded-[24px] border border-[#dbe3d8] bg-white/78 px-4 py-3">
@@ -153,7 +152,7 @@ export default async function ContractPage({
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="secondary">
             <Link href={`/accounts/${encodeURIComponent(detail.address)}`}>
-              Open account dossier
+              Open account profile
               <ArrowRight className="size-4" />
             </Link>
           </Button>
@@ -367,12 +366,12 @@ export default async function ContractPage({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-[#132118]">Review priorities</CardTitle>
+              <CardTitle className="text-[#132118]">What to inspect</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-[#556357]">
-              <p>Check similar contracts first if you suspect cloning or templated deployment.</p>
-              <p>Use the account dossier and graph view when value movement matters.</p>
-              <p>Bytecode is primary evidence. Source, decompilation, and ABI are supporting context.</p>
+              <p>Start with bytecode size, flagged state, and the similar-contract list.</p>
+              <p>Use the account profile when you want transaction history around the contract address.</p>
+              <p>Use graph tracing when value movement around the contract matters.</p>
             </CardContent>
           </Card>
         </div>

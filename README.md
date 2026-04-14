@@ -21,7 +21,7 @@ Go API and a routed Next.js dashboard.
 The core idea of the project is that a single database model is not enough for
 all forensic workloads:
 
-- a relational database is best for ledger data, integrity, and case records
+- a relational database is best for ledger data, integrity, and structured investigation data
 - a graph database is best for multi-hop transaction tracing
 - a vector database extension is best for similarity search over contracts and
   account behavior
@@ -64,7 +64,7 @@ application domain.
 
 | Store | Role in the system | Why it is used |
 | --- | --- | --- |
-| PostgreSQL | Main transactional store | Best fit for accounts, transactions, flags, notes, tags, and metadata with integrity guarantees |
+| PostgreSQL | Main transactional store | Best fit for accounts, transactions, flags, metadata, and enrichment state with integrity guarantees |
 | Neo4j | Transaction-flow graph | Best fit for path queries, hub discovery, and circular flow detection |
 | pgvector | Similarity search inside PostgreSQL | Best fit for contract bytecode similarity and behavioral nearest-neighbor search |
 
@@ -99,14 +99,10 @@ The PostgreSQL schema is evolved through SQL migrations in [`migrations/`](migra
   - stores status, retry count, lock information, and next availability
   - demonstrates queue-like processing inside a relational system
 
-### Intelligence / case-management tables
+### Intelligence tables
 
 - `known_entities`
   - curated labels for addresses such as exchange, stablecoin, hub, or mixer
-- `investigator_notes`
-  - free-text analyst notes attached to an address
-- `address_tags`
-  - normalized address-tag pairs with uniqueness enforcement
 - `contract_metadata`
   - stores ABI, source code, decompiled code, compiler version, and verification
   - uses `JSONB` for ABI because ABI structure is semi-structured but still
@@ -126,21 +122,19 @@ The schema demonstrates several important database design principles:
 - primary keys on business identifiers:
   - `accounts.address`
   - `transactions.hash`
-- foreign-key relationships from transactions, notes, tags, and metadata back
-  to `accounts`
+- foreign-key relationships from transactions, flags, and metadata back to
+  `accounts`
 - domain constraints:
   - `forensic_flags.severity IN ('low', 'medium', 'high')`
   - `known_entities.risk_level IN ('none', 'low', 'medium', 'high')`
 - deduplication constraints:
   - unique forensic signal index on `(tx_hash, address, flag_type)`
-  - unique tag constraint on `(address, tag)`
 - targeted indexes for expected access patterns:
   - `transactions(from_address)`
   - `transactions(to_address)`
   - `transactions(block_number)`
   - `forensic_flags(address)`
   - `known_entities(entity_type, is_hub, risk_level)`
-  - descending indexes for notes/tags recency
 
 These choices are central to the project because the application must support
 both ingestion and investigation efficiently.
@@ -219,8 +213,7 @@ This system demonstrates different classes of database operations:
 
 - recent transaction ledger queries
 - top active addresses
-- account dossier aggregation
-- case notes and tags
+- account profile aggregation
 - enrichment queue management
 - alert and metrics retrieval
 
@@ -242,12 +235,14 @@ The frontend is organized to expose the database capabilities clearly:
 
 - `/overview`
   - relational summaries, metrics, enrichment state, recent activity
+- `/accounts/[address]`
+  - account profile view with relational aggregates, counterparties, behavior profile, and velocity
+- `/transactions/[hash]`
+  - transaction-level view with payload and linked forensic flags
 - `/graph`
   - graph traversal, path tracing, hub analysis
-- `/alerts`
-  - forensic flags, velocity spikes, circular flow review
-- `/accounts/[address]`
-  - dossier view with relational aggregates, notes, tags, behavior profile
+- `/contracts`
+  - recent contracts and contract-focused review
 - `/contracts/[address]`
   - contract metadata and vector similarity
 

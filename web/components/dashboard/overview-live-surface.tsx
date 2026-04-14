@@ -18,8 +18,6 @@ import { Button } from "@/components/ui/button";
 import { clientApiFetch } from "@/lib/client-api";
 import type {
   AddressActivity,
-  ContractSummary,
-  EnrichmentStatus,
   ForensicFlag,
   NetworkMetricPoint,
   OverviewStats,
@@ -49,11 +47,9 @@ const ACTIVITY_WINDOWS = [
 
 type OverviewLiveSurfaceProps = {
   initialOverview: OverviewStats | null;
-  initialEnrichment: EnrichmentStatus | null;
   initialTopAddresses: AddressActivity[];
   initialRecentTransactions: Transaction[];
   initialRecentFlags: ForensicFlag[];
-  initialRecentContracts: ContractSummary[];
   initialNetworkMetrics: NetworkMetricPoint[];
 };
 
@@ -317,7 +313,7 @@ function MetricPanel({
   change: number;
   detail: string;
   icon: React.ReactNode;
-  href: string;
+  href?: string;
 }) {
   const positive = change >= 0;
 
@@ -330,12 +326,14 @@ function MetricPanel({
           </span>
           {title}
         </div>
-        <Link
-          href={href}
-          className="text-xs font-medium text-[#869188] transition hover:text-[#2b6631]"
-        >
-          View more
-        </Link>
+        {href ? (
+          <Link
+            href={href}
+            className="text-xs font-medium text-[#869188] transition hover:text-[#2b6631]"
+          >
+            View more
+          </Link>
+        ) : null}
       </div>
       <div className="mt-4 flex items-end justify-between gap-3">
         <div className="text-[2rem] font-semibold leading-none tracking-tight text-[#152319]">
@@ -360,20 +358,16 @@ function MetricPanel({
 
 export function OverviewLiveSurface({
   initialOverview,
-  initialEnrichment,
   initialTopAddresses,
   initialRecentTransactions,
   initialRecentFlags,
-  initialRecentContracts,
   initialNetworkMetrics,
 }: OverviewLiveSurfaceProps) {
   const { snapshot } = useLiveSnapshot();
   const [overview, setOverview] = useState(initialOverview);
-  const [enrichment, setEnrichment] = useState(initialEnrichment);
   const [topAddresses, setTopAddresses] = useState(initialTopAddresses);
   const [recentTransactions, setRecentTransactions] = useState(initialRecentTransactions);
   const [recentFlags, setRecentFlags] = useState(initialRecentFlags);
-  const [recentContracts, setRecentContracts] = useState(initialRecentContracts);
   const [networkMetrics, setNetworkMetrics] = useState(initialNetworkMetrics);
   const [historyWindowHours, setHistoryWindowHours] = useState<number>(24);
   const [activityWindowHours, setActivityWindowHours] = useState<number>(24);
@@ -387,9 +381,6 @@ export function OverviewLiveSurface({
       if (snapshot.overview) {
         setOverview(snapshot.overview);
       }
-      if (snapshot.enrichment) {
-        setEnrichment(snapshot.enrichment);
-      }
       if (Array.isArray(snapshot.recent_transactions)) {
         setRecentTransactions(snapshot.recent_transactions);
       }
@@ -401,9 +392,8 @@ export function OverviewLiveSurface({
 
   const refreshAnalytics = useCallback(async (hours = historyWindowHours) => {
     try {
-      const [nextTopAddresses, nextRecentContracts, nextNetworkMetrics] = await Promise.all([
+      const [nextTopAddresses, nextNetworkMetrics] = await Promise.all([
         clientApiFetch<AddressActivity[]>("/addresses/top?limit=6"),
-        clientApiFetch<ContractSummary[]>("/contracts/recent?limit=6"),
         clientApiFetch<NetworkMetricPoint[]>(
           `/stats/network?hours=${hours}&bucket=hour`,
         ),
@@ -411,7 +401,6 @@ export function OverviewLiveSurface({
 
       startTransition(() => {
         setTopAddresses(nextTopAddresses);
-        setRecentContracts(nextRecentContracts);
         setNetworkMetrics(nextNetworkMetrics);
       });
     } catch {}
@@ -431,11 +420,6 @@ export function OverviewLiveSurface({
     };
   }, [historyWindowHours, refreshAnalytics]);
 
-  const queueDepth =
-    (enrichment?.pending || 0) +
-    (enrichment?.processing || 0) +
-    (enrichment?.retrying || 0);
-  const flaggedContracts = recentContracts.filter((contract) => contract.flagged).length;
   const highSeverityCount = recentFlags.filter((flag) => flag.severity === "high").length;
   const totalNetworkValue = useMemo(
     () => sumWei(networkMetrics.map((point) => point.total_value)).toString(),
@@ -491,12 +475,6 @@ export function OverviewLiveSurface({
       .map((flag) => [flag.tx_hash, flag] as const),
   );
   const topAddress = topAddresses[0];
-  const riskFocusShare = recentFlags.length
-    ? (highSeverityCount / recentFlags.length) * 100
-    : 0;
-  const contractFocusShare = recentContracts.length
-    ? (flaggedContracts / recentContracts.length) * 100
-    : 0;
   const visibleRecentTransactions = recentTransactions.filter((tx) => {
     const timestamp = new Date(tx.timestamp).getTime();
     if (Number.isNaN(timestamp)) {
@@ -583,7 +561,7 @@ export function OverviewLiveSurface({
 
           <div className="relative z-10 flex flex-wrap items-center gap-2">
             <Button asChild size="sm" className="h-9 rounded-xl bg-[#2fe05b] px-4 text-[#0f2e14] hover:bg-[#3ae466]">
-              <Link href="/alerts">Alerts</Link>
+              <Link href="/graph">Graph</Link>
             </Button>
             <Button
               asChild
@@ -591,7 +569,7 @@ export function OverviewLiveSurface({
               variant="secondary"
               className="h-9 rounded-xl border-0 bg-white/12 px-4 text-white hover:bg-white/18"
             >
-              <Link href="/graph">Trace</Link>
+              <Link href="/contracts">Contracts</Link>
             </Button>
             <Button
               asChild
@@ -599,7 +577,7 @@ export function OverviewLiveSurface({
               variant="secondary"
               className="h-9 rounded-xl border-0 bg-white/12 px-4 text-white hover:bg-white/18"
             >
-              <Link href="/cases">Cases</Link>
+              <Link href="/overview">Activity</Link>
             </Button>
             <Button
               asChild
@@ -630,15 +608,14 @@ export function OverviewLiveSurface({
           change={addressDelta}
           detail={`${formatCount(overview?.contract_count || 0)} contracts already modeled`}
           icon={<BriefcaseBusiness className="size-3.5" />}
-          href="/cases"
+          href="/graph"
         />
         <MetricPanel
-          title="Raised Signals"
+          title="Forensic Flags"
           value={formatCount(overview?.flag_count || 0)}
           change={signalDelta}
-          detail={`${formatCount(highSeverityCount)} recent high-severity flags in scope`}
+          detail={`${formatCount(highSeverityCount)} recent high severity flags in scope`}
           icon={<ShieldAlert className="size-3.5" />}
-          href="/alerts"
         />
       </section>
 
@@ -685,93 +662,69 @@ export function OverviewLiveSurface({
         <div className="self-start rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-base font-semibold text-[#1a271c]">Risk Flow</div>
+              <div className="text-base font-semibold text-[#1a271c]">Recent Forensic Flags</div>
               <div className="mt-1 text-sm text-[#8a948b]">
-                Active risk pressure from alerts and contract review.
+                The newest backend signals attached to the current dataset.
               </div>
             </div>
             <Link
-              href="/alerts"
+              href="/contracts"
               className="text-xs font-medium text-[#869188] transition hover:text-[#2b6631]"
             >
-              View more
+              Contracts
             </Link>
           </div>
 
-          <div className="mt-5 text-[2rem] font-semibold leading-none text-[#172318]">
-            {formatCount(overview?.flag_count || 0)}
-          </div>
-          <div className="mt-2 text-sm text-[#8a948b]">
-            total signals surfaced in the current investigation store
-          </div>
-
-          <div className="mt-8 space-y-6">
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-semibold text-[#172318]">
-                    {formatCount(highSeverityCount)}
+          <div className="mt-5 space-y-3">
+            {recentFlags.slice(0, 4).length ? (
+              recentFlags.slice(0, 4).map((flag) => (
+                <Link
+                  key={flag.id}
+                  href={
+                    flag.tx_hash
+                      ? `/transactions/${encodeURIComponent(flag.tx_hash)}`
+                      : `/accounts/${encodeURIComponent(flag.address)}`
+                  }
+                  className="block rounded-[22px] border border-[#ecefe8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-[#172318]">
+                        {flag.flag_type.replace(/_/g, " ")}
+                      </div>
+                      <div className="mt-1 text-sm text-[#667267]">
+                        {flag.description}
+                      </div>
+                    </div>
+                    <Badge className={riskTone(flag.severity)}>
+                      {flag.severity}
+                    </Badge>
                   </div>
-                  <div className="mt-1 text-sm text-[#7e887f]">
-                    high-severity flags
+                  <div className="mt-3 text-xs text-[#7e887f]">
+                    {formatAddress(flag.address, 7)} · {formatDateTime(flag.detected_at)}
                   </div>
-                </div>
-                <div className="text-xs font-medium text-[#8a948b]">
-                  {formatPercent(riskFocusShare)} risk focus
-                </div>
+                </Link>
+              ))
+            ) : (
+              <div className="rounded-[22px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
+                No forensic flags are available yet.
               </div>
-              <div className="mt-3 h-12 rounded-[18px] bg-[#f1f4ee] px-3 py-2">
-                <div
-                  className="h-full rounded-[12px] bg-[linear-gradient(90deg,#28d94f_0%,#1fb743_100%)]"
-                  style={{ width: `${Math.max(14, riskFocusShare)}%` }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-semibold text-[#172318]">
-                    {formatCount(flaggedContracts)}
-                  </div>
-                  <div className="mt-1 text-sm text-[#7e887f]">
-                    flagged contracts
-                  </div>
-                </div>
-                <div className="text-xs font-medium text-[#8a948b]">
-                  {formatPercent(contractFocusShare)} recent slice
-                </div>
-              </div>
-              <div className="mt-3 h-12 rounded-[18px] bg-[#f7f0ef] px-3 py-2">
-                <div className="flex h-full items-center gap-1 overflow-hidden rounded-[12px]">
-                  {Array.from({ length: 20 }).map((_, index) => (
-                    <span
-                      key={index}
-                      className={cn(
-                        "h-full flex-1 rounded-full",
-                        index < Math.max(2, Math.round((contractFocusShare / 100) * 20))
-                          ? "bg-[#ef5c43]"
-                          : "bg-[#f3d4cf]",
-                      )}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
-          <div className="mt-8 rounded-[22px] border border-[#ecefe8] bg-[#f6f7f3] p-4">
+          <div className="mt-6 rounded-[22px] border border-[#ecefe8] bg-[#f6f7f3] p-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#95a094]">
-              Priority node
+              Priority address
             </div>
             <div className="mt-2 text-sm font-medium text-[#1c2a1d]">
               {topAddress
-                ? `${formatAddress(topAddress.address, 8)} is currently the most active visible node.`
+                ? `${formatAddress(topAddress.address, 8)} is currently the most active tracked address.`
                 : "No address activity has been indexed yet."}
             </div>
             <div className="mt-2 text-sm text-[#7e887f]">
-              Queue depth {formatCount(queueDepth)} · oldest pending{" "}
-              {formatDateTime(enrichment?.oldest_pending_at)}
+              {topAddress
+                ? `${formatCount(topAddress.total_count)} transfers observed · last seen ${formatDateTime(topAddress.last_seen)}`
+                : "No address activity has been indexed yet."}
             </div>
           </div>
         </div>
@@ -780,7 +733,7 @@ export function OverviewLiveSurface({
       <section className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="text-base font-semibold text-[#1a271c]">Recent Activity</div>
+            <div className="text-base font-semibold text-[#1a271c]">Recent Transactions</div>
             <div className="mt-1 text-sm text-[#8a948b]">
               Latest ledger events in the selected window.
             </div>

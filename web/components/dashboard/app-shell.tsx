@@ -4,12 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
-  BriefcaseBusiness,
   ChevronDown,
   Compass,
   FileCode2,
   Network,
-  ShieldAlert,
 } from "lucide-react";
 
 import { AddressJump } from "@/components/dashboard/address-jump";
@@ -20,8 +18,6 @@ const navGroups = [
     label: "General",
     items: [
       { href: "/overview", label: "Overview", icon: Compass },
-      { href: "/alerts", label: "Alerts", icon: ShieldAlert },
-      { href: "/cases", label: "Cases", icon: BriefcaseBusiness },
     ],
   },
   {
@@ -111,15 +107,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="font-medium text-[#2b6631]">Live</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span>Case tools</span>
-                <span className="font-medium text-[#1f2d21]">Enabled</span>
+                <span>Similarity</span>
+                <span className="font-medium text-[#1f2d21]">Ready</span>
               </div>
             </div>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col rounded-[32px] border border-[#e5e9e1] bg-[linear-gradient(180deg,rgba(252,252,249,0.98),rgba(247,248,244,0.96))] px-4 py-4 shadow-[0_30px_80px_rgba(28,41,26,0.075)] sm:px-5 lg:px-6 xl:px-7">
-          <header className="flex flex-col gap-3 rounded-[26px] border border-[#edf0e9] bg-[linear-gradient(180deg,rgba(251,252,248,0.95),rgba(247,248,244,0.9))] px-3 py-3 sm:px-4 md:flex-row md:items-center md:justify-between">
+          <header className="sticky top-3 z-30 flex flex-col gap-3 rounded-[26px] border border-[#edf0e9] bg-[linear-gradient(180deg,rgba(251,252,248,0.96),rgba(247,248,244,0.94))] px-3 py-3 shadow-[0_16px_36px_rgba(28,41,26,0.06)] backdrop-blur-sm sm:top-4 sm:px-4 lg:top-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex size-9 items-center justify-center rounded-2xl border border-[#e4e8e0] bg-[#f5f6f2] text-[#6c776d] md:hidden">
                 <Compass className="size-4" />

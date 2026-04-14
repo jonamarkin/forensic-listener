@@ -18,22 +18,6 @@ type CounterpartyActivity struct {
 	LastSeen      time.Time `json:"last_seen"`
 }
 
-type InvestigatorNote struct {
-	ID        int64     `json:"id"`
-	Address   string    `json:"address"`
-	Author    string    `json:"author"`
-	Note      string    `json:"note"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-type AddressTag struct {
-	ID        int64     `json:"id"`
-	Address   string    `json:"address"`
-	Tag       string    `json:"tag"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 type AccountProfile struct {
 	Address               string                      `json:"address"`
 	Balance               string                      `json:"balance"`
@@ -53,9 +37,6 @@ type AccountProfile struct {
 	IsHub                 bool                        `json:"is_hub"`
 	Counterparties        []*CounterpartyActivity     `json:"counterparties"`
 	RecentTransactions    []*Transaction              `json:"recent_transactions"`
-	Notes                 []*InvestigatorNote         `json:"notes"`
-	Tags                  []*AddressTag               `json:"tags"`
-	Cases                 []*InvestigationCaseSummary `json:"cases"`
 }
 
 type ContractDetail struct {
@@ -112,16 +93,4 @@ type AccountVelocityPoint struct {
 	SentValue     string    `json:"sent_value"`
 	ReceivedValue string    `json:"received_value"`
 	TotalValue    string    `json:"total_value"`
-}
-
-type VelocityAlert struct {
-	Address       string    `json:"address"`
-	EntityName    string    `json:"entity_name"`
-	EntityType    string    `json:"entity_type"`
-	RiskLevel     string    `json:"risk_level"`
-	IsContract    bool      `json:"is_contract"`
-	CurrentCount  int64     `json:"current_count"`
-	BaselineCount float64   `json:"baseline_count"`
-	SpikeRatio    float64   `json:"spike_ratio"`
-	LastSeen      time.Time `json:"last_seen"`
 }

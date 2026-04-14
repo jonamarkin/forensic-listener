@@ -39,49 +39,11 @@ export type ForensicFlag = {
   severity: string;
   description: string;
   detected_at: string;
-  triage_status?: string;
-  assignee?: string;
-  analyst_note?: string;
-  case_id?: number | null;
-  case_title?: string;
-  reviewed_at?: string | null;
   why_flagged?: string;
   trigger_logic?: string;
   confidence?: string;
   provenance?: string;
   next_action?: string;
-};
-
-export type InvestigationCaseSummary = {
-  id: number;
-  title: string;
-  summary: string;
-  status: string;
-  priority: string;
-  owner: string;
-  address_count: number;
-  flag_count: number;
-  open_flag_count: number;
-  created_at: string;
-  updated_at: string;
-};
-
-export type CaseAddress = {
-  id: number;
-  case_id: number;
-  address: string;
-  role: string;
-  note: string;
-  added_at: string;
-  entity_name: string;
-  entity_type: string;
-  risk_level: string;
-  is_contract: boolean;
-};
-
-export type InvestigationCaseDetail = InvestigationCaseSummary & {
-  addresses: CaseAddress[];
-  flags: ForensicFlag[];
 };
 
 export type AddressActivity = {
@@ -164,22 +126,6 @@ export type CounterpartyActivity = {
   last_seen: string;
 };
 
-export type InvestigatorNote = {
-  id: number;
-  address: string;
-  author: string;
-  note: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type AddressTag = {
-  id: number;
-  address: string;
-  tag: string;
-  created_at: string;
-};
-
 export type AccountProfile = {
   address: string;
   balance: string;
@@ -199,9 +145,6 @@ export type AccountProfile = {
   is_hub: boolean;
   counterparties: CounterpartyActivity[];
   recent_transactions: Transaction[];
-  notes: InvestigatorNote[];
-  tags: AddressTag[];
-  cases: InvestigationCaseSummary[];
 };
 
 export type AccountBehaviorProfile = {
@@ -264,18 +207,6 @@ export type AccountVelocityPoint = {
   sent_value: string;
   received_value: string;
   total_value: string;
-};
-
-export type VelocityAlert = {
-  address: string;
-  entity_name: string;
-  entity_type: string;
-  risk_level: string;
-  is_contract: boolean;
-  current_count: number;
-  baseline_count: number;
-  spike_ratio: number;
-  last_seen: string;
 };
 
 export type CircularFlow = {

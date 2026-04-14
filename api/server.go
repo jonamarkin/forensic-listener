@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -55,15 +54,7 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	router.Get("/transactions", s.handleRecentTransactions)
 	router.Get("/transactions/{hash}", s.handleTransactionByHash)
 	router.Get("/transactions/{hash}/flags", s.handleTransactionFlags)
-	router.Get("/cases", s.handleListCases)
-	router.Post("/cases", s.handleCreateCase)
-	router.Get("/cases/{id}/report", s.handleCaseReport)
-	router.Get("/cases/{id}", s.handleCaseDetail)
-	router.Post("/cases/{id}", s.handleUpdateCase)
-	router.Post("/cases/{id}/addresses", s.handleCreateCaseAddress)
 	router.Get("/accounts/{address}/profile", s.handleAccountProfile)
-	router.Post("/accounts/{address}/notes", s.handleCreateAccountNote)
-	router.Post("/accounts/{address}/tags", s.handleCreateAccountTag)
 	router.Get("/accounts/{address}/behavior", s.handleAccountBehavior)
 	router.Get("/accounts/{address}/similar", s.handleSimilarAccounts)
 	router.Get("/accounts/{address}/velocity", s.handleAddressVelocity)
@@ -76,13 +67,11 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	router.Get("/contracts/{address}/similar", s.handleSimilarContracts)
 	router.Get("/contracts/{address}", s.handleContractDetail)
 	router.Get("/flags", s.handleRecentFlags)
-	router.Post("/flags/{id}/triage", s.handleFlagTriage)
 	router.Get("/forensics/circular", s.handleCircularFlows)
 	router.Get("/stats/overview", s.handleOverviewStats)
 	router.Get("/stats/enrichment", s.handleEnrichmentStats)
 	router.Get("/stats/flags", s.handleFlagSeries)
 	router.Get("/stats/network", s.handleNetworkMetrics)
-	router.Get("/alerts/velocity", s.handleVelocityAlerts)
 	router.Get("/stream/events", s.handleEventStream)
 
 	server := &http.Server{
@@ -152,185 +141,6 @@ func (s *Server) handleTransactionFlags(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, flags)
 }
 
-func (s *Server) handleListCases(w http.ResponseWriter, r *http.Request) {
-	cases, err := s.pg.ListCases(
-		r.Context(),
-		parseLimit(r, 20, 100),
-		r.URL.Query().Get("status"),
-	)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, cases)
-}
-
-func (s *Server) handleCreateCase(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		Title    string `json:"title"`
-		Summary  string `json:"summary"`
-		Owner    string `json:"owner"`
-		Priority string `json:"priority"`
-		Address  string `json:"address"`
-		Role     string `json:"role"`
-		Note     string `json:"note"`
-	}
-	if err := readJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if strings.TrimSpace(payload.Title) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "case title must not be empty"})
-		return
-	}
-
-	created, err := s.pg.CreateCase(
-		r.Context(),
-		payload.Title,
-		payload.Summary,
-		payload.Owner,
-		payload.Priority,
-	)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	if strings.TrimSpace(payload.Address) != "" {
-		if _, err := s.pg.AddAddressToCase(
-			r.Context(),
-			created.ID,
-			payload.Address,
-			payload.Role,
-			payload.Note,
-		); err != nil {
-			writeError(w, http.StatusInternalServerError, fmt.Errorf("case created but address attach failed: %w", err))
-			return
-		}
-	}
-
-	detail, err := s.pg.InvestigationCase(r.Context(), created.ID)
-	if err == nil {
-		writeJSON(w, http.StatusCreated, detail.InvestigationCaseSummary)
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, created)
-}
-
-func (s *Server) handleCaseDetail(w http.ResponseWriter, r *http.Request) {
-	caseID, err := parseInt64Param(chi.URLParam(r, "id"), "case id")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	detail, err := s.pg.InvestigationCase(r.Context(), caseID)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	enrichFlags(detail.Flags)
-	writeJSON(w, http.StatusOK, detail)
-}
-
-func (s *Server) handleCaseReport(w http.ResponseWriter, r *http.Request) {
-	caseID, err := parseInt64Param(chi.URLParam(r, "id"), "case id")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	detail, err := s.pg.InvestigationCase(r.Context(), caseID)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	enrichFlags(detail.Flags)
-
-	report := renderCaseReport(detail)
-	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"case-%d-report.md\"", caseID))
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte(report)); err != nil {
-		log.Printf("[api] writing case report: %v", err)
-	}
-}
-
-func (s *Server) handleUpdateCase(w http.ResponseWriter, r *http.Request) {
-	caseID, err := parseInt64Param(chi.URLParam(r, "id"), "case id")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	var payload struct {
-		Title    string `json:"title"`
-		Summary  string `json:"summary"`
-		Owner    string `json:"owner"`
-		Status   string `json:"status"`
-		Priority string `json:"priority"`
-	}
-	if err := readJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if strings.TrimSpace(payload.Title) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "case title must not be empty"})
-		return
-	}
-
-	updated, err := s.pg.UpdateCase(
-		r.Context(),
-		caseID,
-		payload.Title,
-		payload.Summary,
-		payload.Owner,
-		payload.Status,
-		payload.Priority,
-	)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, updated)
-}
-
-func (s *Server) handleCreateCaseAddress(w http.ResponseWriter, r *http.Request) {
-	caseID, err := parseInt64Param(chi.URLParam(r, "id"), "case id")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	var payload struct {
-		Address string `json:"address"`
-		Role    string `json:"role"`
-		Note    string `json:"note"`
-	}
-	if err := readJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if strings.TrimSpace(payload.Address) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "address must not be empty"})
-		return
-	}
-
-	entry, err := s.pg.AddAddressToCase(
-		r.Context(),
-		caseID,
-		payload.Address,
-		payload.Role,
-		payload.Note,
-	)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, entry)
-}
-
 func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	account, err := s.pg.GetAccount(r.Context(), chi.URLParam(r, "address"))
 	if err != nil {
@@ -347,41 +157,6 @@ func (s *Server) handleAccountProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, profile)
-}
-
-func (s *Server) handleCreateAccountNote(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		Author string `json:"author"`
-		Note   string `json:"note"`
-	}
-	if err := readJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	note, err := s.pg.AddAddressNote(r.Context(), chi.URLParam(r, "address"), payload.Author, payload.Note)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, note)
-}
-
-func (s *Server) handleCreateAccountTag(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		Tag string `json:"tag"`
-	}
-	if err := readJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	tag, err := s.pg.AddAddressTag(r.Context(), chi.URLParam(r, "address"), payload.Tag)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, tag)
 }
 
 func (s *Server) handleAccountBehavior(w http.ResponseWriter, r *http.Request) {
@@ -601,44 +376,6 @@ func (s *Server) handleRecentFlags(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, flags)
 }
 
-func (s *Server) handleFlagTriage(w http.ResponseWriter, r *http.Request) {
-	flagID, err := parseIntParam(chi.URLParam(r, "id"), "flag id")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	var payload struct {
-		Status      string `json:"status"`
-		Assignee    string `json:"assignee"`
-		AnalystNote string `json:"analyst_note"`
-		CaseID      *int64 `json:"case_id"`
-	}
-	if err := readJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if payload.CaseID != nil && *payload.CaseID <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "case_id must be positive when provided"})
-		return
-	}
-
-	updated, err := s.pg.UpsertFlagTriage(
-		r.Context(),
-		flagID,
-		payload.Status,
-		payload.Assignee,
-		payload.AnalystNote,
-		payload.CaseID,
-	)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	enrichFlag(updated)
-	writeJSON(w, http.StatusOK, updated)
-}
-
 func (s *Server) handleCircularFlows(w http.ResponseWriter, r *http.Request) {
 	if s.graph == nil {
 		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "neo4j store not configured"})
@@ -690,15 +427,6 @@ func (s *Server) handleNetworkMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, points)
-}
-
-func (s *Server) handleVelocityAlerts(w http.ResponseWriter, r *http.Request) {
-	alerts, err := s.pg.VelocityAlerts(r.Context(), parseWindowMinutes(r), parseLimit(r, 8, 25))
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, alerts)
 }
 
 func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
@@ -855,38 +583,6 @@ func parseBucket(r *http.Request) string {
 	}
 }
 
-func parseWindowMinutes(r *http.Request) int {
-	raw := r.URL.Query().Get("window_minutes")
-	if raw == "" {
-		return 60
-	}
-
-	window, err := strconv.Atoi(raw)
-	if err != nil || window <= 0 {
-		return 60
-	}
-	if window > 24*60 {
-		return 24 * 60
-	}
-	return window
-}
-
-func parseInt64Param(raw, label string) (int64, error) {
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("invalid %s", label)
-	}
-	return value, nil
-}
-
-func parseIntParam(raw, label string) (int, error) {
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("invalid %s", label)
-	}
-	return value, nil
-}
-
 func writeStoreError(w http.ResponseWriter, err error) {
 	var notFound *store.NotFoundError
 	if errors.As(err, &notFound) {
@@ -908,17 +604,6 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	if err := json.NewEncoder(w).Encode(value); err != nil {
 		log.Printf("[api] encoding response: %v", err)
 	}
-}
-
-func readJSONBody(r *http.Request, target any) error {
-	defer r.Body.Close()
-
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("decoding request body: %w", err)
-	}
-	return nil
 }
 
 func (s *Server) enrichAddressGraph(ctx context.Context, graph *models.AddressGraph) error {

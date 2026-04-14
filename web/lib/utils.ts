@@ -158,18 +158,3 @@ export function priorityTone(priority: string | null | undefined) {
       return "bg-[#dceff0] text-[#1f6171] border-[#b8dfe1]";
   }
 }
-
-export function triageTone(status: string | null | undefined) {
-  switch ((status || "").toLowerCase()) {
-    case "escalated":
-      return "bg-[#f5d9d7] text-[#933f34] border-[#e9b8b3]";
-    case "dismissed":
-      return "bg-[#eef1ea] text-[#4d5a50] border-[#dbe3d8]";
-    case "resolved":
-      return "bg-[#e0edd8] text-[#2b6631] border-[#bed7b6]";
-    case "reviewing":
-      return "bg-[#dceff0] text-[#1f6171] border-[#b8dfe1]";
-    default:
-      return "bg-[#f4ead0] text-[#8a6732] border-[#e6d3a2]";
-  }
-}

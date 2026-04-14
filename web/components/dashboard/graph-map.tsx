@@ -59,7 +59,7 @@ export function GraphMap({
   if (!graph || !graph.nodes.length) {
     return (
       <div className="flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-[#dbe3d8] bg-white/75 px-5 text-center text-sm text-[#5d6a60] sm:min-h-[420px]">
-        Select an address to render a multi-hop flow canvas.
+        Select an address to render a multi-hop graph workspace.
       </div>
     );
   }
@@ -179,7 +179,7 @@ export function GraphMap({
 
             return (
               <g key={node.id}>
-                <a href={href} aria-label={`Open dossier for ${node.id}`}>
+                <a href={href} aria-label={`Open account profile for ${node.id}`}>
                   <title>
                     {label} · {node.entity_type || (node.is_contract ? "contract" : "wallet")}
                   </title>

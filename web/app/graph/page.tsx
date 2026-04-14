@@ -116,7 +116,7 @@ export default async function GraphPage({
       <section className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-[1.55rem] font-semibold tracking-tight text-[#162317] lg:text-[1.8rem]">
-            Flow Trace Workspace
+            Graph Workspace
           </h1>
           <p className="mt-1 text-sm text-[#8a948b]">
             Trace fund movement across nearby addresses and contracts.
@@ -125,14 +125,14 @@ export default async function GraphPage({
 
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="secondary" className="rounded-xl">
-            <Link href="/alerts">
-              Open alerts
+            <Link href="/overview">
+              Back to overview
               <ArrowRight className="size-4" />
             </Link>
           </Button>
           <Button asChild className="rounded-xl">
-            <Link href="/cases">
-              Open cases
+            <Link href="/contracts">
+              Open contracts
               <ArrowRight className="size-4" />
             </Link>
           </Button>
@@ -304,9 +304,9 @@ export default async function GraphPage({
           ) : null}
 
           <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
-            <div className="text-base font-semibold text-[#1a271c]">Reading guide</div>
+            <div className="text-base font-semibold text-[#1a271c]">Node legend</div>
             <div className="mt-1 text-sm text-[#8a948b]">
-              Read the graph first, then open detail pages as needed.
+              Click any visible node or label to open its account profile.
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -318,10 +318,6 @@ export default async function GraphPage({
                 hub
               </Badge>
               <Badge variant="danger">high risk</Badge>
-            </div>
-
-            <div className="mt-4 rounded-[22px] border border-[#ecefe8] bg-[#f5f7f2] p-4 text-sm text-[#556357]">
-              Click any visible node or label to open its dossier.
             </div>
           </div>
 

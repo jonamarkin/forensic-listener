@@ -19,7 +19,6 @@ import {
   formatWeiToEth,
   formatWeiToGwei,
   riskTone,
-  triageTone,
 } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -154,7 +153,7 @@ export default async function TransactionPage({
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="secondary">
             <Link href={`/accounts/${encodeURIComponent(tx.from)}`}>
-              Open sender dossier
+              Open sender profile
               <ArrowRight className="size-4" />
             </Link>
           </Button>
@@ -162,6 +161,12 @@ export default async function TransactionPage({
             <Link href={`/graph?address=${encodeURIComponent(tx.from)}&depth=2`}>
               Trace sender in graph
               <Network className="size-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href="/overview">
+              Back to overview
+              <ArrowRight className="size-4" />
             </Link>
           </Button>
         </div>
@@ -199,7 +204,7 @@ export default async function TransactionPage({
                 <CardTitle className="text-[#132118]">Counterparty flow</CardTitle>
               </div>
               <CardDescription>
-                Open either side of the transaction directly into its address dossier.
+                Open either side of the transaction directly into its account profile.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 lg:grid-cols-2">
@@ -294,8 +299,8 @@ export default async function TransactionPage({
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Badge className={triageTone(flag.triage_status)}>
-                          {flag.triage_status || "new"}
+                        <Badge className={riskTone(flag.severity)}>
+                          {flag.severity}
                         </Badge>
                         <Badge className="bg-white/80 text-[#425145] border-[#d7e2d0]">
                           {flag.confidence || "medium"} confidence
@@ -320,14 +325,6 @@ export default async function TransactionPage({
                         {formatAddress(flag.address, 7)}
                       </Link>
                       <span>{formatDateTime(flag.detected_at)}</span>
-                      {flag.case_id && flag.case_title ? (
-                        <Link
-                          href={`/cases/${flag.case_id}`}
-                          className="rounded-full border border-[#d7e2d0] bg-white/88 px-3 py-1 transition hover:bg-white"
-                        >
-                          {flag.case_title}
-                        </Link>
-                      ) : null}
                     </div>
                   </div>
                 ))
@@ -360,16 +357,6 @@ export default async function TransactionPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-[#132118]">Next steps</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-[#556357]">
-              <p>Open the sender dossier for broader account history.</p>
-              <p>Open graph or contract pages if the payload or recipient needs deeper review.</p>
-              <p>Validate linked flags against the surrounding account and case context.</p>
-            </CardContent>
-          </Card>
         </div>
       </section>
     </div>

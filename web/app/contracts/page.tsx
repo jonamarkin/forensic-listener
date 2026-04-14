@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Fingerprint, Network, ScanSearch } from "lucide-react";
+import { ArrowRight, Fingerprint, ScanSearch } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,9 @@ export default async function ContractsLandingPage() {
     (await maybeApiFetch<ContractSummary[]>("/contracts/recent?limit=12")) || [];
   const visibleContracts = recentContracts.slice(0, 8);
   const flaggedCount = recentContracts.filter((contract) => contract.flagged).length;
+  const withBytecodeCount = recentContracts.filter(
+    (contract) => contract.bytecode_size > 0,
+  ).length;
 
   return (
     <div className="space-y-6 pb-10">
@@ -55,14 +58,14 @@ export default async function ContractsLandingPage() {
           <CardContent className="flex h-full flex-col justify-between gap-8 p-7 sm:p-8">
             <div className="space-y-4">
               <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-white/70">
-                Contract Intelligence
+                Contract Analysis
               </p>
               <div className="space-y-3">
                 <h1 className="max-w-xl text-3xl font-semibold tracking-[-0.04em] sm:text-[2.6rem]">
-                  Review code-bearing entities in a dedicated contract queue.
+                  Review code-bearing addresses and compare their bytecode.
                 </h1>
                 <p className="max-w-2xl text-sm leading-7 text-white/76">
-                  Recent deployments, flagged bytecode, and direct links into similarity and graph tracing.
+                  Recent contracts, flagged bytecode, and direct access to similarity results.
                 </p>
               </div>
             </div>
@@ -83,7 +86,7 @@ export default async function ContractsLandingPage() {
                 className="border-white/25 bg-white/12 text-white hover:bg-white/18"
               >
                 <Link href="/overview">
-                  Return to dashboard
+                  Return to overview
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
@@ -103,9 +106,9 @@ export default async function ContractsLandingPage() {
             detail="Suspicious contracts inside the recent slice"
           />
           <ContractQueueMetric
-            label="Similarity matches"
-            value={formatCount(visibleContracts.length)}
-            detail="Contracts ready for similarity review"
+            label="With bytecode"
+            value={formatCount(withBytecodeCount)}
+            detail="Contracts with stored bytecode available for comparison"
           />
         </div>
       </section>
@@ -167,33 +170,13 @@ export default async function ContractsLandingPage() {
             <CardHeader>
               <div className="flex items-center gap-2 text-[#2b6631]">
                 <Fingerprint className="size-5" />
-                <CardTitle className="text-[#132118]">Review priorities</CardTitle>
+                <CardTitle className="text-[#132118]">What this page shows</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-[#556357]">
-              <p>Open a contract for bytecode, source artifacts, and nearest matches.</p>
-              <p>Prioritize flagged rows, then use similarity and graph tracing to check broader patterns.</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <Network className="size-5" />
-                <CardTitle className="text-[#132118]">Graph follow-up</CardTitle>
-              </div>
-              <CardDescription>
-                Use graph tracing when fund movement matters.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-[#556357]">
-              <p>Open the graph workspace to trace contract-related flows.</p>
-              <Button asChild variant="secondary">
-                <Link href="/graph">
-                  Open graph workspace
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
+              <p>Each contract is an address marked `is_contract = true` after the backend finds bytecode at that address.</p>
+              <p>Flagged rows indicate contract bytecode that closely resembles another stored contract.</p>
+              <p>Open a contract to inspect bytecode, metadata, and pgvector nearest neighbors.</p>
             </CardContent>
           </Card>
         </div>

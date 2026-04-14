@@ -12,10 +12,6 @@ export function AddressJump() {
   const [isPending, startTransition] = useTransition();
 
   function resolveTarget(trimmed: string) {
-    if (/^\d+$/.test(trimmed)) {
-      return `/cases/${encodeURIComponent(trimmed)}`;
-    }
-
     if (/^0x[a-fA-F0-9]{64}$/.test(trimmed)) {
       return `/transactions/${encodeURIComponent(trimmed)}`;
     }
@@ -49,7 +45,7 @@ export function AddressJump() {
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search address, tx hash, or case"
+          placeholder="Search address or tx hash"
           className="h-10 border-none bg-transparent px-0 text-[#132118] shadow-none placeholder:text-[#98a39a] focus:ring-0"
         />
       </div>

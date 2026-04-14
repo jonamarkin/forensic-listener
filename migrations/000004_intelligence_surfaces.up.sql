@@ -1,26 +1,3 @@
-CREATE TABLE IF NOT EXISTS investigator_notes (
-    id         BIGSERIAL PRIMARY KEY,
-    address    TEXT NOT NULL REFERENCES accounts(address) ON DELETE CASCADE,
-    author     TEXT NOT NULL DEFAULT 'operator',
-    note       TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_investigator_notes_address
-    ON investigator_notes(address, updated_at DESC);
-
-CREATE TABLE IF NOT EXISTS address_tags (
-    id         BIGSERIAL PRIMARY KEY,
-    address    TEXT NOT NULL REFERENCES accounts(address) ON DELETE CASCADE,
-    tag        TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT address_tags_unique UNIQUE (address, tag)
-);
-
-CREATE INDEX IF NOT EXISTS idx_address_tags_address
-    ON address_tags(address, created_at DESC);
-
 CREATE TABLE IF NOT EXISTS contract_metadata (
     address          TEXT PRIMARY KEY REFERENCES accounts(address) ON DELETE CASCADE,
     abi              JSONB,
