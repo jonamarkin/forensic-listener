@@ -15,9 +15,7 @@ export async function clientApiFetch<T>(path: string, init?: RequestInit): Promi
       if (body?.error) {
         detail = body.error;
       }
-    } catch {
-      // Fall back to the HTTP status text.
-    }
+    } catch {}
     throw new Error(detail);
   }
 

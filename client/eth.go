@@ -10,9 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-// Client wraps the go-ethereum WebSocket client.
-// WebSocket is required (not HTTP) because we need a persistent
-// connection to receive pushed transaction events from Geth.
+// Client wraps the go-ethereum WebSocket client used by ingestion.
 type Client struct {
 	ec *ethclient.Client
 }
@@ -36,7 +34,6 @@ func (c *Client) Close() {
 }
 
 // CodeAt fetches the latest deployed bytecode for an address.
-// Externally owned accounts return an empty slice.
 func (c *Client) CodeAt(ctx context.Context, address string) ([]byte, error) {
 	if !common.IsHexAddress(address) {
 		return nil, fmt.Errorf("invalid hex address: %s", address)
@@ -50,14 +47,10 @@ func (c *Client) CodeAt(ctx context.Context, address string) ([]byte, error) {
 	return code, nil
 }
 
-// SubscribePendingTransactions opens a WebSocket subscription for
-// pending transactions and returns a channel of full transaction objects.
-// The caller owns the channel and should drain it until it is closed.
+// SubscribePendingTransactions streams full pending transactions over WebSocket.
 func (c *Client) SubscribePendingTransactions(ctx context.Context) (<-chan *types.Transaction, error) {
 	pendingCh := make(chan *types.Transaction, 256)
 
-	// ethclient exposes the underlying RPC client, and Geth accepts a boolean
-	// flag here to stream full transactions instead of only hashes.
 	sub, err := c.ec.Client().EthSubscribe(ctx, pendingCh, "newPendingTransactions", true)
 	if err != nil {
 		return nil, fmt.Errorf("subscribing to pending transactions: %w", err)
@@ -65,8 +58,6 @@ func (c *Client) SubscribePendingTransactions(ctx context.Context) (<-chan *type
 
 	txCh := make(chan *types.Transaction, 256)
 
-	// Relay transactions onto our returned channel so we can close it
-	// cleanly when the context is cancelled or the subscription ends.
 	go func() {
 		defer close(txCh)
 		defer sub.Unsubscribe()

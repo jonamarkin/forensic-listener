@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/big"
 	"sync"
 	"time"
 
@@ -18,38 +17,16 @@ import (
 )
 
 const (
-	// ingestWorkers handles the hot path into Postgres. Sized to match
-	// the Postgres pool MaxConns so the primary ledger path can fully
-	// utilize the database without queueing behind enrichment work.
-	ingestWorkers = 20
-
-	// ingestBuffer absorbs short mempool bursts before the engine blocks
-	// and applies backpressure to the subscription stream.
-	ingestBuffer = 2048
-
-	// enrichmentWorkers handles slower ETL and forensic analysis work.
-	enrichmentWorkers = 3
-
-	// enrichmentPollInterval is how long idle enrichment workers sleep
-	// before checking the durable queue again.
-	enrichmentPollInterval = 200 * time.Millisecond
-
-	// enrichmentRetryDelay controls how long failed enrichment jobs wait
-	// before being retried from Postgres.
-	enrichmentRetryDelay = 15 * time.Second
-
-	// enrichmentLeaseTTL lets another worker reclaim a job if the previous
-	// worker crashed or disappeared mid-enrichment.
-	enrichmentLeaseTTL = 2 * time.Minute
-
-	// circularDetectionTimeout keeps best-effort graph analysis from holding
-	// the durable enrichment queue open for long periods.
+	ingestWorkers            = 20
+	ingestBuffer             = 2048
+	enrichmentWorkers        = 3
+	enrichmentPollInterval   = 200 * time.Millisecond
+	enrichmentRetryDelay     = 15 * time.Second
+	enrichmentLeaseTTL       = 2 * time.Minute
 	circularDetectionTimeout = 1500 * time.Millisecond
 )
 
-// Engine is the core of the system — it subscribes to Geth,
-// fans transactions out across a worker pool, and routes each
-// one to every store that needs it.
+// Engine coordinates ingestion, persistence, and enrichment.
 type Engine struct {
 	client   *client.Client
 	pg       *store.Postgres
@@ -78,7 +55,6 @@ func NewEngine(
 }
 
 // Run starts the ingestion engine and blocks until ctx is cancelled.
-// It should be called in its own goroutine from main.
 func (e *Engine) Run(ctx context.Context) {
 	log.Println("[engine] starting ingestion engine")
 
@@ -112,7 +88,6 @@ func (e *Engine) Run(ctx context.Context) {
 		ingestWorkers, enrichmentWorkers,
 	)
 
-	// Fan-out loop — receives from Geth and dispatches to workers
 	for {
 		select {
 		case <-ctx.Done():
@@ -124,9 +99,6 @@ func (e *Engine) Run(ctx context.Context) {
 				return
 			}
 
-			// The primary ledger path blocks instead of dropping so Postgres
-			// remains as complete as possible. Slower graph/vector work is
-			// handled asynchronously after the transaction is persisted.
 			select {
 			case ingestCh <- tx:
 			case <-ctx.Done():
@@ -137,8 +109,6 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-// ingestWorker owns the primary Postgres path. It converts and persists
-// transactions first, then hands off slower enrichment to a secondary queue.
 func (e *Engine) ingestWorker(
 	ctx context.Context,
 	id int,
@@ -181,7 +151,6 @@ func (e *Engine) ingestWorker(
 	}
 }
 
-// enrichmentWorker handles the slower ETL and analysis stages.
 func (e *Engine) enrichmentWorker(
 	ctx context.Context,
 	id int,
@@ -236,7 +205,6 @@ func (e *Engine) enrichmentWorker(
 	}
 }
 
-// enrich routes already-persisted transactions into the slower secondary stores.
 func (e *Engine) enrich(ctx context.Context, tx *models.Transaction) error {
 	var errs []error
 	graphReady := e.graph == nil
@@ -249,8 +217,6 @@ func (e *Engine) enrich(ctx context.Context, tx *models.Transaction) error {
 		}
 	}
 
-	// Contract enrichment is intentionally lazy: we only query bytecode for
-	// transactions carrying calldata, which are the most likely to touch contracts.
 	if tx.To != "" && len(tx.Data) > 0 {
 		code, err := e.client.CodeAt(ctx, tx.To)
 		if err != nil {
@@ -293,9 +259,6 @@ func shouldEvaluateCircular(tx *models.Transaction) bool {
 		return false
 	}
 
-	// Contract calls against hot destinations are by far the most expensive
-	// paths to expand in Neo4j and produce the least reliable laundering
-	// signal, so keep circular detection focused on simple transfers.
 	return len(tx.Data) == 0
 }
 
@@ -311,10 +274,7 @@ func sleepOrDone(ctx context.Context, delay time.Duration) bool {
 	}
 }
 
-// toModel converts a go-ethereum transaction into our domain model.
-// This is the boundary between the Ethereum library's types and our
-// own types — keeping this conversion in one place means the rest
-// of the codebase never imports go-ethereum types directly.
+// toModel converts a go-ethereum transaction into the application's domain model.
 func toModel(tx *types.Transaction) (*models.Transaction, error) {
 	to := ""
 	if tx.To() != nil {
@@ -335,12 +295,6 @@ func toModel(tx *types.Transaction) (*models.Transaction, error) {
 	if tx.GasPrice() != nil {
 		gasPrice = tx.GasPrice().String()
 	}
-
-	// Pending transactions have no block number yet —
-	// we store 0 and update when the block is confirmed.
-	// This is intentional for the forensics use case where
-	// we want to catch patterns before transactions are mined.
-	_ = big.NewInt(0)
 
 	return &models.Transaction{
 		Hash:        tx.Hash().Hex(),

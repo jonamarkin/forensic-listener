@@ -17,34 +17,24 @@ import (
 	"forensic-listener/models"
 )
 
-// Postgres implements Store using a pgxpool connection pool.
-// pgxpool is safe for concurrent use — all worker goroutines
-// share this single instance without any additional locking.
+// Postgres implements Store with a pgx connection pool.
 type Postgres struct {
 	pool *pgxpool.Pool
 }
 
-// compile-time check: Postgres must fully implement Store.
-// If a method is missing, this line fails at compile time —
-// not at runtime when it's too late.
 var _ Store = (*Postgres)(nil)
 
 // NewPostgres creates and validates a new Postgres store.
-// connStr format: "postgres://user:pass@host:port/dbname"
 func NewPostgres(ctx context.Context, connStr string) (*Postgres, error) {
 	cfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
 		return nil, fmt.Errorf("parsing connection string: %w", err)
 	}
 
-	// Pool tuning — sized for the worker pool in the ingestion engine
 	cfg.MaxConns = 20
 	cfg.MinConns = 5
 	cfg.MaxConnLifetime = 1 * time.Hour
 	cfg.MaxConnIdleTime = 30 * time.Minute
-
-	// HealthCheckPeriod proactively replaces broken connections
-	// before they cause errors in the application
 	cfg.HealthCheckPeriod = 1 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -52,7 +42,6 @@ func NewPostgres(ctx context.Context, connStr string) (*Postgres, error) {
 		return nil, fmt.Errorf("creating connection pool: %w", err)
 	}
 
-	// Confirm connectivity before returning
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("pinging postgres: %w", err)
@@ -64,8 +53,6 @@ func NewPostgres(ctx context.Context, connStr string) (*Postgres, error) {
 func (p *Postgres) Close() {
 	p.pool.Close()
 }
-
-// ── Accounts ────────────────────────────────────────────────────────────────
 
 // UpsertAccount inserts an account or updates last_seen on conflict.
 // Called before every transaction insert to satisfy the foreign key constraint.
@@ -1420,24 +1407,17 @@ func (p *Postgres) SeedKnownEntities(ctx context.Context) (int, error) {
 	return seeded, nil
 }
 
-// ── Transactions ─────────────────────────────────────────────────────────────
-
-// SaveTransaction persists a transaction atomically.
-// The database transaction ensures both account upserts and the
-// transaction insert either all succeed or all roll back together.
+// SaveTransaction persists a transaction and its account references atomically.
 func (p *Postgres) SaveTransaction(ctx context.Context, tx *models.Transaction) error {
 	fromAddress := NormalizeAddress(tx.From)
 	toAddress := NormalizeAddress(tx.To)
 
-	// Begin database transaction
 	dbTx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
-	// Safe to call even after a successful Commit — becomes a no-op
 	defer dbTx.Rollback(ctx)
 
-	// Upsert sender — every transaction has a from address
 	if _, err := dbTx.Exec(ctx, `
 		INSERT INTO accounts (address, is_contract, first_seen, last_seen)
 		VALUES ($1, FALSE, NOW(), NOW())
@@ -1446,7 +1426,6 @@ func (p *Postgres) SaveTransaction(ctx context.Context, tx *models.Transaction) 
 		return fmt.Errorf("upserting sender %s: %w", fromAddress, err)
 	}
 
-	// Upsert receiver — may be empty on contract creation
 	if toAddress != "" {
 		if _, err := dbTx.Exec(ctx, `
 			INSERT INTO accounts (address, is_contract, first_seen, last_seen)
@@ -1457,8 +1436,6 @@ func (p *Postgres) SaveTransaction(ctx context.Context, tx *models.Transaction) 
 		}
 	}
 
-	// Insert the transaction — ON CONFLICT DO NOTHING handles
-	// duplicate delivery from the Geth subscription gracefully
 	_, err = dbTx.Exec(ctx, `
 		INSERT INTO transactions
 		    (hash, from_address, to_address, value, gas,
@@ -1623,8 +1600,6 @@ func (p *Postgres) TransactionByHash(ctx context.Context, hash string) (*models.
 	}
 	return tx, nil
 }
-
-// ── Forensic flags ───────────────────────────────────────────────────────────
 
 // SaveFlag persists a forensic flag raised by the analysis engine.
 func (p *Postgres) SaveFlag(ctx context.Context, flag *models.ForensicFlag) error {
@@ -1997,11 +1972,7 @@ func (p *Postgres) FlagSeries(ctx context.Context, bucket string, hours int) ([]
 	return buckets, rows.Err()
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-// nullableString converts an empty string to nil so Postgres
-// stores it as NULL rather than an empty string — important for
-// the to_address field which is NULL on contract creation transactions.
+// nullableString converts an empty string to nil for nullable SQL fields.
 func nullableString(s string) *string {
 	if s == "" {
 		return nil
@@ -2009,9 +1980,7 @@ func nullableString(s string) *string {
 	return &s
 }
 
-// scanTransactions is a shared helper to avoid duplicating
-// the scanning logic between RecentTransactions and any future
-// query that returns a list of transactions.
+// scanTransactions scans a result set into transaction models.
 func scanTransactions(rows pgx.Rows) ([]*models.Transaction, error) {
 	txs := make([]*models.Transaction, 0)
 	for rows.Next() {
@@ -2029,7 +1998,6 @@ func scanTransactions(rows pgx.Rows) ([]*models.Transaction, error) {
 		}
 		txs = append(txs, tx)
 	}
-	// rows.Err() catches any error that occurred during iteration
 	return txs, rows.Err()
 }
 
@@ -2173,10 +2141,7 @@ func normalizeTriageStatus(status string) string {
 	}
 }
 
-// RunMigrations applies all pending migrations on startup.
-// golang-migrate tracks applied migrations in a schema_migrations
-// table it manages itself, so this is safe to call every time
-// the application starts — already-applied migrations are skipped.
+// RunMigrations applies pending schema migrations on startup.
 func RunMigrations(connStr string) error {
 	m, err := migrate.New("file://migrations", connStr)
 	if err != nil {

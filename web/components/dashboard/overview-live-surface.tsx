@@ -414,9 +414,7 @@ export function OverviewLiveSurface({
         setRecentContracts(nextRecentContracts);
         setNetworkMetrics(nextNetworkMetrics);
       });
-    } catch {
-      // Preserve the last stable snapshot during demo sessions.
-    }
+    } catch {}
   }, [historyWindowHours]);
 
   useEffect(() => {

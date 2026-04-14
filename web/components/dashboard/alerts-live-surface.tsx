@@ -156,9 +156,7 @@ export function AlertsLiveSurface({
         setCircularFlows(nextCircularFlows);
         setNetworkMetrics(nextNetworkMetrics);
       });
-    } catch {
-      // Keep the last known alert analytics during demo sessions.
-    }
+    } catch {}
   }, []);
 
   useEffect(() => {

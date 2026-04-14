@@ -37,9 +37,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       if (body?.error) {
         detail = body.error;
       }
-    } catch {
-      // Ignore decode failures and fall back to the HTTP status.
-    }
+    } catch {}
     throw new Error(detail);
   }
 
