@@ -87,6 +87,12 @@ a {
   text-decoration: none;
 }
 
+/* Grid items default to min-width: auto, so a wide table inside one would widen the
+   whole page on phones instead of scrolling inside its own container. */
+.grid > * {
+  min-width: 0;
+}
+
 pre,
 code {
   font-feature-settings: "liga" 0;

@@ -1,169 +1,121 @@
 import Link from "next/link";
-import { ArrowRight, ScanSearch } from "lucide-react";
+import { AlertTriangle, Fingerprint, ScanSearch } from "lucide-react";
 
+import { QueryDisclosure } from "@/components/dashboard/query-disclosure";
+import { SourceTag } from "@/components/dashboard/source-tag";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { maybeApiFetch } from "@/lib/api";
+import { apiResult } from "@/lib/api";
+import { QUERIES } from "@/lib/queries";
 import type { ContractSummary } from "@/lib/types";
-import {
-  formatAddress,
-  formatCount,
-  formatDateTime,
-} from "@/lib/utils";
+import { formatAddress, formatExact, formatRelativeTime, riskTone } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-function ContractQueueMetric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <Card className="bg-white/82 shadow-none">
-      <CardContent className="pt-5">
-        <div className="text-[11px] uppercase tracking-[0.2em] text-[#7b887d]">
-          {label}
-        </div>
-        <div className="mt-3 text-2xl font-semibold text-[#132118]">{value}</div>
-        <div className="mt-2 text-sm text-[#6c786d]">{detail}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default async function ContractsLandingPage() {
-  const recentContracts =
-    (await maybeApiFetch<ContractSummary[]>("/contracts/recent?limit=12")) || [];
-  const visibleContracts = recentContracts.slice(0, 8);
-  const flaggedCount = recentContracts.filter((contract) => contract.flagged).length;
-  const withBytecodeCount = recentContracts.filter(
-    (contract) => contract.bytecode_size > 0,
-  ).length;
+export default async function ContractsPage() {
+  const result = await apiResult<ContractSummary[]>("/contracts/recent?limit=24");
+  const contracts = result.data ?? [];
+  const analysed = contracts.filter((c) => c.bytecode_size > 0).length;
+  const flagged = contracts.filter((c) => c.flagged).length;
+  const inFamilies = contracts.filter((c) => c.clone_family_size > 1).length;
 
   return (
     <div className="space-y-6 pb-10">
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.22fr)_360px]">
-        <Card className="overflow-hidden border-none bg-[linear-gradient(135deg,#16361b_0%,#265a2f_55%,#8fbc7d_100%)] text-white shadow-[0_22px_70px_rgba(18,41,23,0.18)]">
-          <CardContent className="flex h-full flex-col justify-between gap-8 p-7 sm:p-8">
-            <div className="space-y-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-white/70">
-                Contract Analysis
-              </p>
-              <div className="space-y-3">
-                <h1 className="max-w-xl text-3xl font-semibold tracking-[-0.04em] sm:text-[2.6rem]">
-                  Review code-bearing addresses and compare their bytecode.
-                </h1>
-                <p className="max-w-2xl text-sm leading-7 text-white/76">
-                  Recent contracts, flagged bytecode, and direct access to similarity results.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button
-                asChild
-                className="!bg-white !text-[#16361b] hover:!bg-[#f3f7ef]"
-              >
-                <Link href="/graph">
-                  Open graph
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="secondary"
-                className="border-white/25 bg-white/12 text-white hover:bg-white/18"
-              >
-                <Link href="/overview">
-                  Return to overview
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-          <ContractQueueMetric
-            label="Recent contracts"
-            value={formatCount(recentContracts.length)}
-            detail="Latest bytecode-bearing addresses in the current slice"
-          />
-          <ContractQueueMetric
-            label="Flagged deployments"
-            value={formatCount(flaggedCount)}
-            detail="Suspicious contracts inside the recent slice"
-          />
-          <ContractQueueMetric
-            label="With bytecode"
-            value={formatCount(withBytecodeCount)}
-            detail="Contracts with stored bytecode available for comparison"
-          />
+      <section>
+        <div className="flex items-center gap-2">
+          <h1 className="text-[1.6rem] font-semibold tracking-tight text-[#162317] lg:text-[1.85rem]">Contracts</h1>
+          <SourceTag engine="postgres" />
+          <SourceTag engine="pgvector" />
         </div>
+        <p className="mt-1 max-w-3xl text-sm text-[#7b867c]">
+          Contracts called or deployed in observed transactions, most recently active first. The first time a contract is seen,
+          its bytecode is fetched from the node and embedded in pgvector so clones and close variants can be found.
+        </p>
       </section>
 
-      <section>
-        <Card>
-          <CardHeader className="space-y-4">
-            <div className="flex items-center gap-2 text-[#2b6631]">
-              <ScanSearch className="size-5" />
-              <CardTitle className="text-[#132118]">Recent contract queue</CardTitle>
-            </div>
-            <CardDescription>
-              Recent contracts available for bytecode review.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            {visibleContracts.length ? (
-              visibleContracts.map((contract) => (
+      {result.error ? (
+        <div role="alert" className="flex items-start gap-3 rounded-[20px] border border-[#ecc5c0] bg-[#fcefed] px-4 py-3 text-sm text-[#7f2f27]">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          {result.error}
+        </div>
+      ) : null}
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Shown", value: contracts.length, detail: "most recently active" },
+          { label: "Code analysed", value: analysed, detail: "bytecode stored and embedded" },
+          { label: "Flagged", value: flagged, detail: "clone of a risky contract" },
+          { label: "In a clone family", value: inFamilies, detail: "share code with another deployment" },
+        ].map((item) => (
+          <div key={item.label} className="rounded-[22px] border border-[#e8ebe4] bg-[#fdfefb] p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.12em] text-[#8a948b]">{item.label}</div>
+            <div className="mt-2 text-2xl font-semibold tabular-nums text-[#152319]">{formatExact(item.value)}</div>
+            <div className="mt-1 text-xs text-[#7b867c]">{item.detail}</div>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.7fr)]">
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+            <ScanSearch className="size-4 text-[#2b6631]" />
+            Recently active contracts
+          </h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {contracts.length ? (
+              contracts.map((contract) => (
                 <Link
                   key={contract.address}
-                  href={`/contracts/${encodeURIComponent(contract.address)}`}
-                  className="block rounded-[26px] border border-[#dbe3d8] bg-white/82 p-5 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
+                  href={`/contracts/${contract.address}`}
+                  className="block rounded-[22px] border border-[#e8ebe4] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-[#132118]">
-                        {formatAddress(contract.address, 9)}
-                      </div>
-                      <div className="mt-1 text-sm text-[#5d6a60]">
-                        First seen {formatDateTime(contract.first_seen)}
-                      </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-[#132118]">{contract.entity_name || formatAddress(contract.address, 7)}</div>
+                      <div className="mt-0.5 font-mono text-[11px] text-[#7e887f]">{formatAddress(contract.address, 6)}</div>
                     </div>
-                    <Badge
-                      className={
-                        contract.flagged
-                          ? "bg-[#f5d9d7] text-[#933f34] border-[#e9b8b3]"
-                          : "bg-[#eef1ea] text-[#4d5a50] border-[#dbe3d8]"
-                      }
-                    >
-                      {contract.flagged ? "flagged" : "observed"}
-                    </Badge>
+                    <div className="flex shrink-0 gap-1.5">
+                      {contract.flagged ? <Badge variant="danger">flagged</Badge> : null}
+                      {contract.risk_level !== "none" ? <Badge className={riskTone(contract.risk_level)}>{contract.risk_level}</Badge> : null}
+                    </div>
                   </div>
-                  <div className="mt-4 text-sm text-[#5d6a60]">
-                    Bytecode size {formatCount(contract.bytecode_size)} · last seen{" "}
-                    {formatDateTime(contract.last_seen)}
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#6f7b72]">
+                    <span>{contract.bytecode_size ? `${formatExact(contract.bytecode_size)} bytes` : "code not analysed yet"}</span>
+                    {contract.clone_family_size > 1 ? (
+                      <span className="flex items-center gap-1 text-[#8a5a12]">
+                        <Fingerprint className="size-3" />
+                        {contract.clone_family_size} deployments share this code
+                      </span>
+                    ) : null}
+                    <span>active {formatRelativeTime(contract.last_seen)}</span>
                   </div>
                 </Link>
               ))
             ) : (
-              <div className="rounded-[24px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
-                No recent contracts are available from the backend yet.
+              <div className="rounded-[20px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065] md:col-span-2">
+                No contracts observed yet.
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+          <h2 className="text-base font-semibold text-[#1a271c]">How contract similarity works</h2>
+          <ol className="mt-3 space-y-3 text-sm leading-6 text-[#56645a]">
+            <li>
+              <b className="text-[#1c2a1d]">1. Normalise.</b> The bytecode is read as EVM opcodes; constants inside PUSH instructions and the
+              compiler's metadata trailer are dropped.
+            </li>
+            <li>
+              <b className="text-[#1c2a1d]">2. Embed.</b> Opcode pairs and triples are hashed into a 1,024-dimension vector with random signs, so
+              unrelated code cancels out (≈0) and shared structure adds up.
+            </li>
+            <li>
+              <b className="text-[#1c2a1d]">3. Compare.</b> pgvector's HNSW index returns the nearest contracts by cosine similarity. At 85% or more
+              to a contract labelled risky, a flag is raised.
+            </li>
+          </ol>
+          <QueryDisclosure query={QUERIES.similarContracts} />
+        </div>
       </section>
     </div>
   );

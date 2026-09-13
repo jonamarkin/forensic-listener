@@ -1,51 +1,84 @@
 "use client";
 
-import { Activity, LoaderCircle, RadioTower } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { useLiveSnapshot } from "@/components/dashboard/live-snapshot-provider";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatExact, formatRelativeTime } from "@/lib/utils";
 
+const STALE_AFTER_MS = 60_000;
+
+type Tone = "live" | "warn" | "down";
+
+/**
+ * Header status driven by real signals: the browser's event stream connection and
+ * the backend's node feeds. Replaces a dot that was always green.
+ */
 export function LiveIndicator() {
-  const { status, lastSyncAt } = useLiveSnapshot();
+  const { status, snapshot } = useLiveSnapshot();
+  const [now, setNow] = useState(() => Date.now());
 
-  if (status === "live") {
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge className="border-[#bed7b6] bg-[#e0edd8] text-[#2b6631]">
-          <Activity className="mr-1 size-3.5" />
-          Live
-        </Badge>
-        <span className="text-xs text-[#69766b]">
-          Last snapshot {formatDateTime(lastSyncAt)}
-        </span>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  let tone: Tone = "warn";
+  let label = "Connecting";
+  let detail = "Waiting for the first live snapshot.";
 
   if (status === "reconnecting") {
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge className="border-[#e6d3a2] bg-[#f4ead0] text-[#8a6732]">
-          <LoaderCircle className="mr-1 size-3.5 animate-spin" />
-          Reconnecting
-        </Badge>
-        <span className="text-xs text-[#69766b]">
-          Snapshot feed is retrying in the background.
-        </span>
-      </div>
+    tone = "down";
+    label = "API offline";
+    detail = "The live stream from the Go API dropped. Retrying.";
+  } else if (snapshot) {
+    const ingestion = snapshot.ingestion;
+    const lastEvent = Math.max(
+      ingestion.last_pending_at ? new Date(ingestion.last_pending_at).getTime() : 0,
+      ingestion.last_head_at ? new Date(ingestion.last_head_at).getTime() : 0,
     );
+    const connected = ingestion.pending_feed_connected || ingestion.head_feed_connected;
+
+    if (!connected) {
+      tone = "down";
+      label = "Node disconnected";
+      detail = "Neither the pending-transaction nor the block feed is connected.";
+    } else if (!lastEvent || now - lastEvent > STALE_AFTER_MS) {
+      tone = "warn";
+      label = "Feed idle";
+      detail = `Connected, but no data for ${formatRelativeTime(lastEvent ? new Date(lastEvent) : null, now).replace(" ago", "")}.`;
+    } else {
+      tone = "live";
+      label = ingestion.last_block ? `Live · block ${formatExact(ingestion.last_block)}` : "Live";
+      detail = `Last node event ${formatRelativeTime(new Date(lastEvent), now)}.`;
+    }
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Badge variant="outline" className="text-[#465f4a]">
-        <RadioTower className="mr-1 size-3.5" />
-        Connecting
-      </Badge>
-      <span className="text-xs text-[#69766b]">
-        Waiting for the first stream snapshot.
+    <Link
+      href="/system"
+      title={detail}
+      className={cn(
+        "flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-medium transition hover:bg-white",
+        tone === "live" && "border-[#cfe3c8] bg-[#f1f8ee] text-[#2b6631]",
+        tone === "warn" && "border-[#eadcb4] bg-[#fbf6e8] text-[#8a6732]",
+        tone === "down" && "border-[#ecc5c0] bg-[#fcefed] text-[#933f34]",
+      )}
+    >
+      <span className="relative flex size-2">
+        {tone === "live" ? (
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#28b04e] opacity-60 motion-reduce:hidden" />
+        ) : null}
+        <span
+          className={cn(
+            "relative inline-flex size-2 rounded-full",
+            tone === "live" && "bg-[#28b04e]",
+            tone === "warn" && "bg-[#d19a2a]",
+            tone === "down" && "bg-[#c54d41]",
+          )}
+        />
       </span>
-    </div>
+      <span className="whitespace-nowrap">{label}</span>
+    </Link>
   );
 }

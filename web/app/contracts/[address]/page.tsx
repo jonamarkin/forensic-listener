@@ -1,380 +1,175 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  Binary,
-  Fingerprint,
-  Network,
-  ShieldAlert,
-} from "lucide-react";
+import { ArrowRight, Binary, Fingerprint, Network, Tag } from "lucide-react";
 
+import { LabelForm } from "@/components/dashboard/label-form";
+import { QueryDisclosure } from "@/components/dashboard/query-disclosure";
+import { SourceTag } from "@/components/dashboard/source-tag";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { maybeApiFetch } from "@/lib/api";
-import type { ContractDetail, ContractSimilarity } from "@/lib/types";
-import {
-  entityTone,
-  formatAddress,
-  formatCount,
-  formatDateTime,
-  formatSimilarity,
-  riskTone,
-} from "@/lib/utils";
+import { apiResult } from "@/lib/api";
+import { QUERIES } from "@/lib/queries";
+import type { AccountProfile, ContractDetail, ContractSimilarity } from "@/lib/types";
+import { entityTone, formatAddress, formatDateTime, formatExact, formatRelativeTime, formatSimilarity, riskTone } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-type RouteParams = Promise<{
-  address: string;
-}>;
+type RouteParams = Promise<{ address: string }>;
 
-function prettyJson(value: unknown) {
-  if (!value) {
-    return "";
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
+const THRESHOLD = 0.85;
 
-function ContractMetric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <Card className="bg-white/82 shadow-none">
-      <CardContent className="pt-5">
-        <div className="text-[11px] uppercase tracking-[0.2em] text-[#7b887d]">
-          {label}
-        </div>
-        <div className="mt-3 text-2xl font-semibold text-[#132118]">{value}</div>
-        <div className="mt-2 text-sm text-[#6c786d]">{detail}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default async function ContractPage({
-  params,
-}: {
-  params: RouteParams;
-}) {
+export default async function ContractPage({ params }: { params: RouteParams }) {
   const { address } = await params;
-  const [detail, similar] = await Promise.all([
-    maybeApiFetch<ContractDetail>(`/contracts/${encodeURIComponent(address)}`),
-    maybeApiFetch<ContractSimilarity[]>(
-      `/contracts/${encodeURIComponent(address)}/similar?limit=8`,
-    ),
+  const [detailResult, similarResult, profileResult] = await Promise.all([
+    apiResult<ContractDetail>(`/contracts/${encodeURIComponent(address)}`),
+    apiResult<ContractSimilarity[]>(`/contracts/${encodeURIComponent(address)}/similar?limit=8`),
+    apiResult<AccountProfile>(`/accounts/${encodeURIComponent(address)}/profile`),
   ]);
 
+  const detail = detailResult.data;
   if (!detail) {
+    const title = detailResult.status === 400 ? "That is not a valid address." : detailResult.status === 404 ? "No contract is recorded at this address." : "The contract could not be loaded.";
     return (
-      <div className="space-y-6 pb-10">
-        <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-3">
-            <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[#6c796f]">
-              Contract Analysis
-            </p>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#132118] sm:text-4xl">
-                Contract not found.
-              </h1>
-              <p className="max-w-2xl text-sm leading-7 text-[#59675d]">
-                The requested contract is not available from the forensic backend
-                right now.
-              </p>
-            </div>
-          </div>
-          <Button asChild variant="secondary">
-            <Link href="/contracts">
-              Back to contracts
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        </section>
+      <div className="space-y-4 pb-10">
+        <h1 className="text-3xl font-semibold tracking-tight text-[#132118]">{title}</h1>
+        <p className="max-w-2xl text-sm leading-7 text-[#59675d]">
+          {detailResult.status === 404 ? "It may be a wallet, or a contract that has not been called in observed transactions." : detailResult.error}
+        </p>
+        <Button asChild variant="secondary">
+          <Link href={`/accounts/${address}`}>Open as an account</Link>
+        </Button>
       </div>
     );
   }
 
+  const similar = similarResult.data ?? [];
+  const profile = profileResult.data;
+
   return (
     <div className="space-y-6 pb-10">
       <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div className="space-y-4">
-          <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[#6c796f]">
-            Contract Analysis
-          </p>
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Badge className={entityTone(detail.entity_type || "contract")}>
-                {detail.entity_type || "contract"}
-              </Badge>
-              <Badge className={riskTone(detail.risk_level)}>
-                {detail.risk_level || "observed"}
-              </Badge>
-              <Badge
-                className={
-                  detail.flagged
-                    ? "bg-[#f5d9d7] text-[#933f34] border-[#e9b8b3]"
-                    : "bg-[#eef1ea] text-[#4d5a50] border-[#dbe3d8]"
-                }
-              >
-                {detail.flagged ? "flagged" : "observed"}
-              </Badge>
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#132118] sm:text-4xl">
-                {detail.entity_name || formatAddress(detail.address, 10)}
-              </h1>
-              <p className="max-w-3xl text-sm leading-7 text-[#59675d]">
-                Contract-focused view for bytecode, stored metadata, and nearest-neighbor similarity from pgvector.
-              </p>
-            </div>
-            <div className="rounded-[24px] border border-[#dbe3d8] bg-white/78 px-4 py-3">
-              <div className="font-mono text-sm text-[#2a382f] [overflow-wrap:anywhere]">
-                {detail.address}
-              </div>
-            </div>
+        <div className="min-w-0 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge className={entityTone(detail.entity_type)}>{detail.entity_type}</Badge>
+            <Badge className={riskTone(detail.risk_level)}>{detail.risk_level === "none" ? "no risk signals" : `${detail.risk_level} risk`}</Badge>
+            {detail.flagged ? <Badge variant="danger">flagged clone</Badge> : null}
           </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-[#132118] sm:text-4xl">{detail.entity_name || `Contract ${formatAddress(detail.address, 6)}`}</h1>
+          <p className="font-mono text-sm text-[#2a382f] [overflow-wrap:anywhere]">{detail.address}</p>
         </div>
-
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="secondary">
-            <Link href={`/accounts/${encodeURIComponent(detail.address)}`}>
-              Open account profile
-              <ArrowRight className="size-4" />
+            <Link href={`/accounts/${detail.address}`}>
+              Account view
+              <ArrowRight />
             </Link>
           </Button>
           <Button asChild>
-            <Link href={`/graph?address=${encodeURIComponent(detail.address)}&depth=2`}>
-              Trace contract flow
-              <Network className="size-4" />
+            <Link href={`/graph?address=${detail.address}&depth=1`}>
+              Flows in graph
+              <Network />
             </Link>
           </Button>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <ContractMetric
-          label="Bytecode size"
-          value={formatCount(detail.bytecode_size)}
-          detail="Stored low-level bytecode length"
-        />
-        <ContractMetric
-          label="Verified"
-          value={detail.verified ? "Yes" : "No"}
-          detail={
-            detail.compiler_version
-              ? `Compiler ${detail.compiler_version}`
-              : "Compiler unknown"
-          }
-        />
-        <ContractMetric
-          label="Similar matches"
-          value={formatCount((similar || []).length)}
-          detail="Nearest bytecode neighbors from pgvector"
-        />
-        <ContractMetric
-          label="Observed"
-          value={formatDateTime(detail.last_seen)}
-          detail={`First seen ${formatDateTime(detail.first_seen)}`}
-        />
+        {[
+          { label: "Bytecode", value: detail.bytecode_size ? `${formatExact(detail.bytecode_size)} bytes` : "Not analysed", detail: detail.embedded_at ? `embedded ${formatRelativeTime(detail.embedded_at)}` : "fetched on first call" },
+          { label: "Clone family", value: formatExact(detail.clone_family_size), detail: "deployments with identical code structure" },
+          { label: "Calls observed", value: formatExact(detail.transaction_count), detail: "transactions sent to this contract" },
+          { label: "Last active", value: formatRelativeTime(detail.last_seen), detail: `first seen ${formatDateTime(detail.first_seen)}` },
+        ].map((item) => (
+          <div key={item.label} className="rounded-[22px] border border-[#e8ebe4] bg-[#fdfefb] p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.12em] text-[#8a948b]">{item.label}</div>
+            <div className="mt-2 text-2xl font-semibold tabular-nums text-[#152319]">{item.value}</div>
+            <div className="mt-1 text-xs text-[#7b867c]">{item.detail}</div>
+          </div>
+        ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_360px]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_380px]">
         <div className="space-y-6">
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <ShieldAlert className="size-5" />
-                <CardTitle className="text-[#132118]">Contract brief</CardTitle>
-              </div>
-              <CardDescription>
-                Core contract context.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
-                <div className="text-sm font-semibold text-[#132118]">Lifecycle</div>
-                <div className="mt-3 space-y-2 text-sm text-[#556357]">
-                  <div>First seen: {formatDateTime(detail.first_seen)}</div>
-                  <div>Last seen: {formatDateTime(detail.last_seen)}</div>
-                  <div>Address: {detail.address}</div>
-                </div>
-              </div>
-              <div className="rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4">
-                <div className="text-sm font-semibold text-[#132118]">
-                  Intelligence context
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-[#556357]">
-                  <div>Entity name: {detail.entity_name || "Unlabeled"}</div>
-                  <div>Risk level: {detail.risk_level || "Unknown"}</div>
-                  <div>Source artifacts: {detail.source_code ? "available" : "missing"}</div>
-                  <div>Decompiler output: {detail.decompiled_code ? "available" : "missing"}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <details
-            open
-            className="overflow-hidden rounded-[30px] border border-[#dbe3d8] bg-white/82"
-          >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
-              <div>
-                <div className="text-sm font-semibold text-[#132118]">
-                  Bytecode fingerprint
-                </div>
-                <div className="mt-1 text-sm text-[#617065]">
-                  Raw bytecode.
-                </div>
-              </div>
-              <Binary className="size-4 text-[#2b6631]" />
-            </summary>
-            <div className="border-t border-[#e2e8dd] p-4">
-              <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-xs leading-6 text-[#314137]">
-                {detail.bytecode || "No bytecode stored."}
-              </pre>
+          <section className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+                <Fingerprint className="size-4 text-[#8a5a12]" />
+                Most similar contracts
+              </h2>
+              <SourceTag engine="pgvector" />
             </div>
-          </details>
-
-          {detail.source_code ? (
-            <details className="overflow-hidden rounded-[30px] border border-[#dbe3d8] bg-white/82">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
-                <div>
-                  <div className="text-sm font-semibold text-[#132118]">Source code</div>
-                  <div className="mt-1 text-sm text-[#617065]">
-                    Verified implementation.
-                  </div>
-                </div>
-                <span className="rounded-full border border-[#d7e2d0] bg-[#f7faf4] px-3 py-1 text-xs font-medium text-[#2b6631]">
-                  Expand
-                </span>
-              </summary>
-              <div className="border-t border-[#e2e8dd] p-4">
-                <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-xs leading-6 text-[#314137]">
-                  {detail.source_code}
-                </pre>
-              </div>
-            </details>
-          ) : null}
-
-          {detail.decompiled_code ? (
-            <details className="overflow-hidden rounded-[30px] border border-[#dbe3d8] bg-white/82">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
-                <div>
-                  <div className="text-sm font-semibold text-[#132118]">
-                    Decompiled view
-                  </div>
-                  <div className="mt-1 text-sm text-[#617065]">
-                    Recovered logic view.
-                  </div>
-                </div>
-                <span className="rounded-full border border-[#d7e2d0] bg-[#f7faf4] px-3 py-1 text-xs font-medium text-[#2b6631]">
-                  Expand
-                </span>
-              </summary>
-              <div className="border-t border-[#e2e8dd] p-4">
-                <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-xs leading-6 text-[#314137]">
-                  {detail.decompiled_code}
-                </pre>
-              </div>
-            </details>
-          ) : null}
-
-          {detail.abi ? (
-            <details className="overflow-hidden rounded-[30px] border border-[#dbe3d8] bg-white/82">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
-                <div>
-                  <div className="text-sm font-semibold text-[#132118]">ABI</div>
-                  <div className="mt-1 text-sm text-[#617065]">
-                    Contract interface.
-                  </div>
-                </div>
-                <span className="rounded-full border border-[#d7e2d0] bg-[#f7faf4] px-3 py-1 text-xs font-medium text-[#2b6631]">
-                  Expand
-                </span>
-              </summary>
-              <div className="border-t border-[#e2e8dd] p-4">
-                <pre className="max-h-[320px] overflow-auto rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 text-xs leading-6 text-[#314137]">
-                  {prettyJson(detail.abi)}
-                </pre>
-              </div>
-            </details>
-          ) : null}
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <Fingerprint className="size-5" />
-                <CardTitle className="text-[#132118]">Similar contracts</CardTitle>
-              </div>
-              <CardDescription>
-                Nearest bytecode neighbors to help spot clones, kits, or deployment
-                families.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {(similar || []).length ? (
-                similar!.slice(0, 4).map((match) => (
-                  <Link
-                    key={match.address}
-                    href={`/contracts/${encodeURIComponent(match.address)}`}
-                    className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-[#132118]">
-                          {formatAddress(match.address, 8)}
-                        </div>
-                        <div className="mt-1 text-sm text-[#5d6a60]">
-                          Similarity {formatSimilarity(match.similarity)}
-                        </div>
-                      </div>
-                      <Badge
-                        className={
-                          match.flagged
-                            ? "bg-[#f5d9d7] text-[#933f34] border-[#e9b8b3]"
-                            : "bg-[#eef1ea] text-[#4d5a50] border-[#dbe3d8]"
-                        }
-                      >
-                        {match.flagged ? "flagged" : "observed"}
-                      </Badge>
+            <p className="mt-1 text-sm text-[#7b867c]">
+              Nearest bytecode embeddings. Scores of {formatSimilarity(THRESHOLD)} or more mean the same code family.
+            </p>
+            <div className="mt-4 space-y-2">
+              {similar.length ? (
+                similar.map((match) => (
+                  <Link key={match.address} href={`/contracts/${match.address}`} className="block rounded-[18px] border border-[#ecefe8] bg-white px-4 py-3 transition hover:border-[#b4cda8]">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-sm font-medium text-[#1c2a1d]">{match.entity_name || formatAddress(match.address, 7)}</span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        {match.same_skeleton ? <Badge variant="warning">identical code</Badge> : null}
+                        {match.flagged ? <Badge variant="danger">flagged</Badge> : null}
+                        {match.risk_level !== "none" ? <Badge className={riskTone(match.risk_level)}>{match.risk_level}</Badge> : null}
+                        <span className="w-14 text-right text-sm font-semibold tabular-nums">{formatSimilarity(match.similarity)}</span>
+                      </span>
+                    </div>
+                    <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-[#edf1e8]">
+                      <div className={`h-full rounded-full ${match.similarity >= THRESHOLD ? "bg-[#8a5a12]" : "bg-[#c9b48f]"}`} style={{ width: `${Math.round(match.similarity * 100)}%` }} />
+                      <div className="absolute inset-y-0 w-px bg-[#5d4a2a]" style={{ left: `${THRESHOLD * 100}%` }} title="flag threshold" />
                     </div>
                   </Link>
                 ))
               ) : (
-                <div className="rounded-[24px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
-                  No similar contracts were returned for this bytecode yet.
+                <div className="rounded-[20px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-5 text-sm text-[#627065]">
+                  {detail.bytecode_size ? "No other contracts have been embedded yet." : "Similarity is available once this contract's code has been analysed."}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+            <QueryDisclosure query={QUERIES.similarContracts} />
+          </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-[#132118]">What to inspect</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-[#556357]">
-              <p>Start with bytecode size, flagged state, and the similar-contract list.</p>
-              <p>Use the account profile when you want transaction history around the contract address.</p>
-              <p>Use graph tracing when value movement around the contract matters.</p>
-            </CardContent>
-          </Card>
+          <details className="overflow-hidden rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
+              <span className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+                <Binary className="size-4 text-[#2b6631]" />
+                Runtime bytecode
+              </span>
+              <span className="text-xs text-[#7e887f]">{formatExact(detail.bytecode_size)} bytes · expand</span>
+            </summary>
+            <div className="space-y-3 border-t border-[#e2e8dd] p-5">
+              <div className="text-xs text-[#6f7b72]">
+                Opcode skeleton hash: <span className="font-mono text-[#1c2a1d] [overflow-wrap:anywhere]">{detail.skeleton_hash || "not computed"}</span>
+              </div>
+              <pre className="max-h-[320px] overflow-auto rounded-[18px] border border-[#dbe3d8] bg-[#f6f9f3] p-4 font-mono text-[11px] leading-5 text-[#314137] whitespace-pre-wrap [overflow-wrap:anywhere]">
+                {detail.bytecode === "0x" ? "No bytecode stored." : detail.bytecode}
+              </pre>
+            </div>
+          </details>
         </div>
+
+        <section className="h-fit rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+              <Tag className="size-4 text-[#2b6631]" />
+              Label this contract
+            </h2>
+            <SourceTag engine="postgres" />
+          </div>
+          <p className="mt-1 mb-4 text-sm leading-6 text-[#7b867c]">
+            Labelling a contract medium or high risk immediately flags stored contracts whose code is at least {formatSimilarity(THRESHOLD)} similar, and
+            every future deployment of the same code.
+          </p>
+          <LabelForm
+            address={detail.address}
+            isContract
+            initial={{
+              name: profile?.entity_name ?? detail.entity_name,
+              entity_type: profile?.label_source ? detail.entity_type : "scam",
+              risk_level: profile?.label_source ? (profile?.label_risk ?? "none") : "high",
+              source: profile?.label_source ?? "",
+            }}
+          />
+        </section>
       </section>
     </div>
   );
