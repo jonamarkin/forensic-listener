@@ -2,57 +2,38 @@ package api
 
 import "forensic-listener/models"
 
+// flagExplanation is fixed, per-detector context shown next to a flag. It describes
+// how the detector works; it is not computed for the individual flag.
 type flagExplanation struct {
 	WhyFlagged   string
 	TriggerLogic string
-	Confidence   string
+	Method       string
 	Provenance   string
 	NextAction   string
 }
 
 var defaultFlagExplanation = flagExplanation{
-	WhyFlagged:   "A configured forensic heuristic observed behavior that diverges from the platform's normal pattern expectations.",
-	TriggerLogic: "Raised when the detector for this flag type reports suspicious behavior for the transaction or address under review.",
-	Confidence:   "medium",
-	Provenance:   "Forensic Listener heuristic engine",
-	NextAction:   "Review the surrounding transactions, linked entities, and graph context before escalating.",
+	WhyFlagged:   "A forensic rule matched this transaction or address.",
+	TriggerLogic: "Raised by one of the enrichment detectors.",
+	Method:       "rule-based",
+	Provenance:   "Forensic Listener enrichment pipeline",
+	NextAction:   "Review the surrounding transactions and counterparties before drawing conclusions.",
 }
 
 var flagExplanationCatalog = map[string]flagExplanation{
 	"circular_flow": {
-		WhyFlagged:   "Value appears to leave an address and then return to the origin through a short multi-hop path.",
-		TriggerLogic: "Raised when graph traversal finds a bounded return path back to the same address within the configured circular-flow depth.",
-		Confidence:   "medium",
-		Provenance:   "Neo4j circular-flow detector",
-		NextAction:   "Inspect the full path in Flow Canvas and compare hop timing, counterparties, and value symmetry.",
+		WhyFlagged:   "Value left an address and came back to it through a chain of transfers, each happening after the previous one.",
+		TriggerLogic: "When a transfer A → B is enriched, Neo4j searches for an earlier path B → … → A of at most 3 hops, within the previous 7 days, whose transfers are in time order. ETH transactions and ERC-20 transfers both count as hops.",
+		Method:       "rule-based graph traversal",
+		Provenance:   "Neo4j variable-length path query (FindReturnPath)",
+		NextAction:   "Open each hop in the loop, compare timing and amounts, and label the addresses involved if the pattern is confirmed.",
 	},
 	"similar_bytecode": {
-		WhyFlagged:   "The contract bytecode strongly resembles another contract family already observed in the dataset.",
-		TriggerLogic: "Raised when bytecode vector similarity crosses the configured nearest-neighbor threshold for suspicious contract families.",
-		Confidence:   "medium",
-		Provenance:   "pgvector contract-similarity matcher",
-		NextAction:   "Open the contract intelligence route, inspect the nearest matches, and compare source or decompiled behavior.",
-	},
-	"velocity_spike": {
-		WhyFlagged:   "The address is transacting much faster than its recent historical baseline.",
-		TriggerLogic: "Raised when short-window transaction counts exceed baseline activity by the configured spike ratio and minimum event count.",
-		Confidence:   "medium",
-		Provenance:   "PostgreSQL velocity baseline query",
-		NextAction:   "Compare the address dossier's recent velocity buckets and counterparties before escalation.",
-	},
-	"high_value_transfer": {
-		WhyFlagged:   "A transfer amount exceeded the configured high-value threshold for manual review.",
-		TriggerLogic: "Raised when transfer value crosses the detector's configured value threshold.",
-		Confidence:   "low",
-		Provenance:   "Transaction enrichment rules",
-		NextAction:   "Validate the entity labels on sender and recipient and inspect any linked contracts or flags.",
-	},
-	"hub_interaction": {
-		WhyFlagged:   "The address is interacting with a highly connected hub or curated entity of interest.",
-		TriggerLogic: "Raised when a transaction touches a node labeled as a hub, bridge, exchange, mixer, or other monitored entity.",
-		Confidence:   "low",
-		Provenance:   "Entity-label enrichment and graph degree analysis",
-		NextAction:   "Check the entity label, the transaction purpose, and whether the interaction is typical for this address.",
+		WhyFlagged:   "This contract's code is structurally near-identical to a contract already labelled or flagged as risky.",
+		TriggerLogic: "When a contract is first seen, its opcode-structure embedding is compared with stored contracts in pgvector. A cosine similarity of 85% or more to a medium- or high-risk contract raises this flag.",
+		Method:       "rule-based vector similarity",
+		Provenance:   "pgvector HNSW nearest-neighbour search over contract embeddings",
+		NextAction:   "Compare both contracts on their contract pages, then check who deployed and funded them.",
 	},
 }
 
@@ -60,15 +41,13 @@ func enrichFlag(flag *models.ForensicFlag) {
 	if flag == nil {
 		return
 	}
-
 	explanation, ok := flagExplanationCatalog[flag.FlagType]
 	if !ok {
 		explanation = defaultFlagExplanation
 	}
-
 	flag.WhyFlagged = explanation.WhyFlagged
 	flag.TriggerLogic = explanation.TriggerLogic
-	flag.Confidence = explanation.Confidence
+	flag.Confidence = explanation.Method
 	flag.Provenance = explanation.Provenance
 	flag.NextAction = explanation.NextAction
 }
