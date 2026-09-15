@@ -1,422 +1,371 @@
 import Link from "next/link";
-import { ArrowRight, Binary, Compass, Route } from "lucide-react";
+import { AlertTriangle, ArrowRight, Network, Repeat, Route } from "lucide-react";
 
 import { GraphMap } from "@/components/dashboard/graph-map";
+import { QueryDisclosure } from "@/components/dashboard/query-disclosure";
+import { SourceTag } from "@/components/dashboard/source-tag";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { maybeApiFetch } from "@/lib/api";
-import type { AccountProfile, AddressGraph, AddressTrace, HubSummary } from "@/lib/types";
-import { formatAddress, formatCount, formatDateTime, formatWeiToEth, riskTone } from "@/lib/utils";
+import { apiResult } from "@/lib/api";
+import { QUERIES } from "@/lib/queries";
+import type { AccountProfile, AddressGraph, AddressTrace, CircularFlow, HubSummary } from "@/lib/types";
+import { formatAddress, formatBaseUnits, formatDateTime, formatExact, formatRelativeTime, formatWeiToEth, riskTone } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-function firstParam(value?: string | string[]) {
-  if (Array.isArray(value)) {
-    return value[0] || "";
-  }
-  return value || "";
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const FLOW_OPTIONS = [
+  { value: "all", label: "ETH and tokens" },
+  { value: "eth", label: "ETH only" },
+  { value: "token", label: "Tokens only" },
+];
+
+function first(value?: string | string[]) {
+  return (Array.isArray(value) ? value[0] : value)?.trim() ?? "";
 }
 
-function GraphMetric({
-  title,
-  value,
-  detail,
-  icon,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  icon: React.ReactNode;
-}) {
+function clampInt(raw: string, fallback: number, min: number, max: number) {
+  const value = Number.parseInt(raw, 10);
+  return Number.isNaN(value) ? fallback : Math.min(max, Math.max(min, value));
+}
+
+const selectClass =
+  "flex h-11 w-full rounded-[20px] border border-[color:var(--border)] bg-white px-4 text-sm text-[#132118] outline-none focus:border-[#97bf89] focus:ring-2 focus:ring-[#d5e8ce]";
+
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="rounded-[24px] border border-[#e8ebe4] bg-[#fdfefb] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
-      <div className="flex items-center gap-2 text-sm font-medium text-[#263328]">
-        <span className="flex size-6 items-center justify-center rounded-full bg-[#f0f5eb] text-[#2b6631]">
-          {icon}
-        </span>
-        {title}
-      </div>
-      <div className="mt-4 text-[2rem] font-semibold leading-none tracking-tight text-[#152319]">
-        {value}
-      </div>
-      <div className="mt-2 text-sm text-[#8a948b]">{detail}</div>
+    <div className={`rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)] ${className}`}>
+      {children}
     </div>
   );
 }
 
-export default async function GraphPage({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}) {
+function Notice({ tone, children }: { tone: "error" | "info"; children: React.ReactNode }) {
+  return (
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      className={
+        tone === "error"
+          ? "flex items-start gap-3 rounded-[20px] border border-[#ecc5c0] bg-[#fcefed] px-4 py-3 text-sm text-[#7f2f27]"
+          : "flex items-start gap-3 rounded-[20px] border border-[#dfe6da] bg-[#f5f8f2] px-4 py-3 text-sm text-[#4f5d52]"
+      }
+    >
+      {tone === "error" ? <AlertTriangle className="mt-0.5 size-4 shrink-0" /> : null}
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function LoopList({ loops }: { loops: CircularFlow[] }) {
+  if (!loops.length) {
+    return <p className="text-sm text-[#6f7b72]">No circular flows detected yet.</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {loops.map((loop) => (
+        <Link
+          key={loop.flag_id}
+          href={`/graph?address=${loop.path[1] ?? loop.address}&depth=2&to=${loop.path[0] ?? ""}`}
+          className="block rounded-[20px] border border-[#ecefe8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-[#132118]">{loop.hops}-transfer loop</span>
+            <Badge className={riskTone(loop.severity)}>{loop.severity}</Badge>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1 font-mono text-[11px] text-[#5d6a60]">
+            {loop.path.map((address, index) => (
+              <span key={`${address}-${index}`} className="flex items-center gap-1">
+                {index > 0 ? <span className="text-[#9aa59b]">→</span> : null}
+                {formatAddress(address, 3)}
+              </span>
+            ))}
+          </div>
+          <div className="mt-2 text-xs text-[#7e887f]">
+            {loop.kinds.includes("token") ? "includes token transfers · " : ""}detected {formatRelativeTime(loop.detected_at)}
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+export default async function GraphPage({ searchParams }: { searchParams: SearchParams }) {
   const query = await searchParams;
-  const hubs = (await maybeApiFetch<HubSummary[]>("/entities/hubs?limit=8")) || [];
-  const rawDepth = Number(firstParam(query.depth) || "2");
-  const depth = Math.min(Math.max(rawDepth, 1), 4);
-  const address = firstParam(query.address) || hubs[0]?.address || "";
-  const target = firstParam(query.to);
+  const address = first(query.address);
+  const target = first(query.to);
+  const depth = clampInt(first(query.depth), 2, 1, 3);
+  const hops = clampInt(first(query.hops), 4, 1, 6);
+  const flows = FLOW_OPTIONS.some((o) => o.value === first(query.flows)) ? first(query.flows) : "all";
+  const invalidAddress = address !== "" && !ADDRESS.test(address);
+  const invalidTarget = target !== "" && !ADDRESS.test(target);
 
-  const [graph, trace] = await Promise.all([
-    address
-      ? maybeApiFetch<AddressGraph>(
-          `/addresses/${encodeURIComponent(address)}/graph?depth=${depth}`,
-        )
-      : Promise.resolve(null),
-    address && target
-      ? maybeApiFetch<AddressTrace>(
-          `/addresses/${encodeURIComponent(address)}/trace?to=${encodeURIComponent(
-            target,
-          )}&depth=${depth}`,
-        )
-      : Promise.resolve(null),
+  const [hubs, loops] = await Promise.all([
+    apiResult<HubSummary[]>("/entities/hubs?limit=6"),
+    apiResult<CircularFlow[]>("/forensics/circular?limit=5"),
   ]);
-  const centerProfile = address
-    ? await maybeApiFetch<AccountProfile>(
-        `/accounts/${encodeURIComponent(address)}/profile`,
-      )
-    : null;
-  const fallbackGraph =
-    !graph && centerProfile
-      ? {
-          center: centerProfile.address,
-          nodes: [
-            {
-              id: centerProfile.address,
-              label: centerProfile.address,
-              is_contract: centerProfile.is_contract,
-              entity_type: centerProfile.entity_type,
-              entity_name: centerProfile.entity_name,
-              risk_level: centerProfile.risk_level,
-              is_hub: centerProfile.is_hub,
-              degree: 0,
-            },
-          ],
-          edges: [],
-        }
-      : null;
-  const effectiveGraph = graph ?? fallbackGraph;
 
-  const flaggedNodes =
-    effectiveGraph?.nodes.filter((node) => node.risk_level === "high").length ?? 0;
-  const contractNodes = effectiveGraph?.nodes.filter((node) => node.is_contract).length ?? 0;
-  const visibleEdges = effectiveGraph?.edges.length ?? 0;
-  const topHubs = hubs.slice(0, 4);
-  const traceEdges = (trace?.edges || []).slice(0, 4);
-  const hasOnlyCenterNode =
-    !!effectiveGraph &&
-    effectiveGraph.nodes.length === 1 &&
-    effectiveGraph.edges.length === 0 &&
-    effectiveGraph.center.toLowerCase() === address.toLowerCase();
+  let graph: AddressGraph | null = null;
+  let graphError: string | null = null;
+  let trace: AddressTrace | null = null;
+  let traceError: string | null = null;
+  let profile: AccountProfile | null = null;
+
+  if (address && !invalidAddress) {
+    const [graphResult, traceResult, profileResult] = await Promise.all([
+      apiResult<AddressGraph>(`/addresses/${address}/graph?depth=${depth}&flows=${flows}`),
+      target && !invalidTarget
+        ? apiResult<AddressTrace>(`/addresses/${address}/trace?to=${target}&depth=${hops}&flows=${flows}`)
+        : Promise.resolve(null),
+      apiResult<AccountProfile>(`/accounts/${address}/profile`),
+    ]);
+    graph = graphResult.data;
+    graphError = graphResult.error;
+    trace = traceResult?.data ?? null;
+    traceError = traceResult?.error ?? null;
+    profile = profileResult.data;
+  }
+
+  const highRisk = graph?.nodes.filter((n) => n.risk_level === "high").length ?? 0;
+  const contracts = graph?.nodes.filter((n) => n.is_contract).length ?? 0;
+  const onlyCenter = graph && graph.edges.length === 0;
 
   return (
     <div className="space-y-5 pb-4 lg:space-y-6">
-      <section className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <section className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-[1.55rem] font-semibold tracking-tight text-[#162317] lg:text-[1.8rem]">
-            Graph Workspace
-          </h1>
-          <p className="mt-1 text-sm text-[#8a948b]">
-            Trace fund movement across nearby addresses and contracts.
+          <div className="flex items-center gap-2">
+            <h1 className="text-[1.6rem] font-semibold tracking-tight text-[#162317] lg:text-[1.85rem]">Graph workspace</h1>
+            <SourceTag engine="neo4j" />
+          </div>
+          <p className="mt-1 max-w-3xl text-sm text-[#7b867c]">
+            Addresses are nodes; ETH transactions (<code className="font-mono text-xs">:SENT</code>) and token transfers (
+            <code className="font-mono text-xs">:TRANSFERRED</code>) are directed edges in Neo4j. Expand an address, or trace a
+            route between two.
           </p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="secondary" className="rounded-xl">
-            <Link href="/overview">
-              Back to overview
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-          <Button asChild className="rounded-xl">
-            <Link href="/contracts">
-              Open contracts
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        </div>
       </section>
 
-      <section className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="text-base font-semibold text-[#1a271c]">Trace controls</div>
-            <div className="mt-1 text-sm text-[#8a948b]">
-              Set the start address, hop depth, and optional destination.
-            </div>
-          </div>
-          <div className="flex items-center gap-1 rounded-xl border border-[#ecefe8] bg-[#f8f9f5] p-1 text-[11px] font-medium text-[#627165]">
-            {[1, 2, 3, 4].map((option) => (
-              <span
-                key={option}
-                className={`rounded-lg px-2.5 py-1.5 ${depth === option ? "bg-white text-[#1f2c20] shadow-sm" : ""}`}
-              >
-                {option}H
-              </span>
-            ))}
-            <span className="ml-1 rounded-lg px-2.5 py-1.5 text-[#8a948b]">
-              Set in form
-            </span>
-          </div>
-        </div>
-
-        <form action="/graph" className="mt-5 grid gap-3 xl:grid-cols-[1.35fr_0.46fr_1fr_auto]">
-          <Input
-            name="address"
-            defaultValue={address}
-            placeholder="Start address"
-          />
-          <select
-            name="depth"
-            defaultValue={String(depth)}
-            className="flex h-11 rounded-2xl border border-[#d7e2d0] bg-white px-4 text-sm text-[#132118] outline-none focus:border-[#97bf89] focus:ring-2 focus:ring-[#d5e8ce]"
-          >
-            {[1, 2, 3, 4].map((option) => (
-              <option key={option} value={option}>
-                {option} hop{option > 1 ? "s" : ""}
-              </option>
-            ))}
-          </select>
-          <Input
-            name="to"
-            defaultValue={target}
-            placeholder="Optional destination address"
-          />
-          <Button type="submit" className="rounded-2xl">
+      <Panel>
+        <form action="/graph" className="grid gap-3 lg:grid-cols-[1.4fr_0.55fr_0.7fr_1.2fr_0.5fr_auto] lg:items-end">
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium text-[#4d5b50]">Start address</span>
+            <Input id="graph-address" name="address" defaultValue={address} placeholder="0x…" autoComplete="off" />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium text-[#4d5b50]">Neighbourhood</span>
+            <select id="graph-depth" name="depth" defaultValue={String(depth)} className={selectClass}>
+              {[1, 2, 3].map((d) => (
+                <option key={d} value={d}>
+                  {d} hop{d > 1 ? "s" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium text-[#4d5b50]">Flows</span>
+            <select id="graph-flows" name="flows" defaultValue={flows} className={selectClass}>
+              {FLOW_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium text-[#4d5b50]">Trace to (optional)</span>
+            <Input id="graph-to" name="to" defaultValue={target} placeholder="destination 0x…" autoComplete="off" />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium text-[#4d5b50]">Max hops</span>
+            <select id="graph-hops" name="hops" defaultValue={String(hops)} className={selectClass}>
+              {[2, 3, 4, 5, 6].map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button type="submit" className="rounded-[20px]">
             Render
-            <ArrowRight className="size-4" />
+            <ArrowRight />
           </Button>
         </form>
-      </section>
+      </Panel>
 
-      <section className="grid gap-4 xl:grid-cols-3">
-        <GraphMetric
-          title="Visible nodes"
-          value={formatCount(effectiveGraph?.nodes.length ?? 0)}
-          detail="Addresses and contracts currently inside the trace boundary."
-          icon={<Binary className="size-3.5" />}
-        />
-        <GraphMetric
-          title="Visible contracts"
-          value={formatCount(contractNodes)}
-          detail="Code-bearing nodes in the current trace."
-          icon={<Compass className="size-3.5" />}
-        />
-        <GraphMetric
-          title="High-risk nodes"
-          value={formatCount(flaggedNodes)}
-          detail={`${formatCount(visibleEdges)} directional edges currently rendered.`}
-          icon={<Route className="size-3.5" />}
-        />
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.62fr)_minmax(300px,0.88fr)]">
-        <div className="space-y-4">
-          {hasOnlyCenterNode ? (
-            <div className="rounded-[24px] border border-[#e8ebe4] bg-[#f7faf4] px-4 py-3 text-sm text-[#556357]">
-              No connected neighborhood is stored for this address in Neo4j yet. The
-              focal address is shown so you can still confirm the selected target and
-              pivot into related pages.
-            </div>
-          ) : null}
-          <GraphMap graph={effectiveGraph} depth={depth} />
-        </div>
-
-        <div className="space-y-4">
-          {centerProfile ? (
-            <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-base font-semibold text-[#1a271c]">Center node</div>
-                  <div className="mt-1 text-sm text-[#8a948b]">
-                    {centerProfile.entity_name || formatAddress(centerProfile.address, 8)}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className={riskTone(centerProfile.risk_level)}>
-                    {centerProfile.risk_level || "observed"}
-                  </Badge>
-                  <Badge
-                    className={
-                      centerProfile.is_contract
-                        ? "border-[#c8d3ee] bg-[#ebeffb] text-[#44507d]"
-                        : "border-[#dbe3d8] bg-[#eef1ea] text-[#4d5a50]"
-                    }
-                  >
-                    {centerProfile.is_contract ? "contract" : "wallet"}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[20px] border border-[#ecefe8] bg-[#f5f7f2] p-4">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-[#95a094]">
-                    Activity
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-[#1c2a1d]">
-                    {formatCount(centerProfile.total_count)} transactions
-                  </div>
-                  <div className="mt-1 text-xs text-[#76857a]">
-                    Last seen {formatDateTime(centerProfile.last_seen)}
-                  </div>
-                </div>
-                <div className="rounded-[20px] border border-[#ecefe8] bg-[#f5f7f2] p-4">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-[#95a094]">
-                    Balance
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-[#1c2a1d]">
-                    {formatWeiToEth(centerProfile.balance)}
-                  </div>
-                  <div className="mt-1 text-xs text-[#76857a]">
-                    {formatCount(centerProfile.flag_count)} flags recorded
-                  </div>
-                </div>
-              </div>
-
-              {centerProfile.recent_transactions.length ? (
-                <div className="mt-4 space-y-3">
-                  {centerProfile.recent_transactions.slice(0, 3).map((tx) => (
-                    <Link
-                      key={tx.hash}
-                      href={`/transactions/${encodeURIComponent(tx.hash)}`}
-                      className="block rounded-[20px] border border-[#ecefe8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-[#132118]">
-                            {formatWeiToEth(tx.value)}
-                          </div>
-                          <div className="mt-1 text-xs text-[#76857a]">
-                            {formatDateTime(tx.timestamp)}
-                          </div>
-                        </div>
-                        <div className="font-mono text-xs text-[#607065]">
-                          {formatAddress(tx.hash, 7)}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
-            <div className="text-base font-semibold text-[#1a271c]">Node legend</div>
-            <div className="mt-1 text-sm text-[#8a948b]">
-              Click any visible node or label to open its account profile.
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Badge variant="success">wallet</Badge>
-              <Badge className="border-[#c8d3ee] bg-[#ebeffb] text-[#44507d]">
-                contract
-              </Badge>
-              <Badge className="border-[#c0d8ce] bg-[#e6f1eb] text-[#2f6c58]">
-                hub
-              </Badge>
-              <Badge variant="danger">high risk</Badge>
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+      {!address ? (
+        <section className="grid gap-4 xl:grid-cols-2">
+          <Panel>
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-base font-semibold text-[#1a271c]">Known hubs</div>
-                <div className="mt-1 text-sm text-[#8a948b]">
-                  High-degree entities in the current graph store.
-                </div>
+              <div className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+                <Repeat className="size-4 text-[#2b6631]" />
+                Start from a detected loop
               </div>
-              <Link
-                href="/overview"
-                className="text-xs font-medium text-[#869188] transition hover:text-[#2b6631]"
-              >
-                Dashboard
-              </Link>
+              <SourceTag engine="postgres" />
             </div>
-
-            <div className="mt-5 space-y-3">
-              {topHubs.length ? (
-                topHubs.map((hub) => (
+            <p className="mt-1 mb-4 text-sm text-[#7b867c]">Circular flows found by the detector, with their paths stored as JSON evidence.</p>
+            {loops.error ? <Notice tone="error">{loops.error}</Notice> : <LoopList loops={loops.data ?? []} />}
+          </Panel>
+          <Panel>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+                <Network className="size-4 text-[#2b6631]" />
+                Highest-degree accounts
+              </div>
+              <SourceTag engine="neo4j" />
+            </div>
+            <p className="mt-1 mb-4 text-sm text-[#7b867c]">Accounts with the most transfers in the graph.</p>
+            {hubs.error ? (
+              <Notice tone="error">{hubs.error}</Notice>
+            ) : (
+              <div className="space-y-2">
+                {(hubs.data ?? []).map((hub) => (
                   <Link
                     key={hub.address}
-                    href={`/graph?address=${encodeURIComponent(hub.address)}&depth=2`}
-                    className="block rounded-[22px] border border-[#ecefe8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
+                    href={`/graph?address=${hub.address}&depth=1`}
+                    className="flex items-center justify-between gap-3 rounded-[18px] border border-[#ecefe8] bg-white px-4 py-3 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-[#132118]">
-                          {hub.entity_name || formatAddress(hub.address, 7)}
-                        </div>
-                        <div className="mt-1 text-sm text-[#5d6a60]">
-                          {hub.entity_type || (hub.is_contract ? "contract" : "wallet")}
-                        </div>
-                      </div>
-                      <Badge className={riskTone(hub.risk_level)}>
-                        {hub.risk_level || "observed"}
-                      </Badge>
-                    </div>
-                    <div className="mt-3 text-xs text-[#76857a]">
-                      degree {formatCount(hub.degree)} · in {formatCount(hub.incoming_count)} / out{" "}
-                      {formatCount(hub.outgoing_count)}
-                    </div>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-[#1c2a1d]">{hub.entity_name || formatAddress(hub.address, 6)}</span>
+                      <span className="block text-xs text-[#7e887f]">{hub.entity_type} · {formatExact(hub.incoming_count)} in · {formatExact(hub.outgoing_count)} out</span>
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums">{formatExact(hub.degree)}</span>
                   </Link>
-                ))
-              ) : (
-                <p className="text-sm text-[#6f7b72]">
-                  No hub summaries are available right now.
-                </p>
-              )}
-            </div>
-          </div>
+                ))}
+              </div>
+            )}
+            <QueryDisclosure query={QUERIES.topHubs} />
+          </Panel>
+        </section>
+      ) : null}
 
-          <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
-            <div className="text-base font-semibold text-[#1a271c]">Path trace</div>
-            <div className="mt-1 text-sm text-[#8a948b]">
-              Request a destination above if you need a concrete bounded route.
+      {invalidAddress ? <Notice tone="error">“{address}” is not an address. Enter 0x followed by 40 hex characters.</Notice> : null}
+      {invalidTarget ? <Notice tone="error">The trace destination is not a valid address.</Notice> : null}
+      {graphError ? <Notice tone="error">{graphError}</Notice> : null}
+
+      {graph ? (
+        <>
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "Addresses in view", value: formatExact(graph.nodes.length) },
+              { label: "Transfers in view", value: formatExact(graph.edges.length) },
+              { label: "Contracts", value: formatExact(contracts) },
+              { label: "High-risk addresses", value: formatExact(highRisk) },
+            ].map((item) => (
+              <div key={item.label} className="rounded-[22px] border border-[#e8ebe4] bg-[#fdfefb] px-5 py-4">
+                <div className="text-xs font-medium uppercase tracking-[0.12em] text-[#8a948b]">{item.label}</div>
+                <div className="mt-2 text-2xl font-semibold tabular-nums text-[#152319]">{item.value}</div>
+              </div>
+            ))}
+          </section>
+
+          {onlyCenter ? (
+            <Notice tone="info">
+              This address has no transfers in the graph yet. Enrichment adds edges shortly after a transaction is stored in PostgreSQL.
+            </Notice>
+          ) : null}
+          {graph.truncated ? (
+            <Notice tone="info">
+              This neighbourhood is larger than shown: expansion stops once each hop level reaches its path budget, which keeps busy
+              addresses fast. Reduce hops or open a neighbour to explore further.
+            </Notice>
+          ) : null}
+
+          <section className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
+            <div className="space-y-4">
+              <GraphMap graph={graph} trace={trace} />
+              <QueryDisclosure query={QUERIES.neighbourhood} />
             </div>
 
-            <div className="mt-5 space-y-3">
-              {trace ? (
-                <>
-                  <div className="rounded-[22px] border border-[#ecefe8] bg-[#f5f7f2] p-4">
-                    <div className="text-sm text-[#556357]">
-                      {trace.hops} hop{trace.hops === 1 ? "" : "s"} between{" "}
-                      {formatAddress(trace.from)} and {formatAddress(trace.to)}.
+            <div className="space-y-4">
+              {profile ? (
+                <Panel>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium uppercase tracking-[0.12em] text-[#8a948b]">Centre</div>
+                      <div className="mt-1 truncate text-base font-semibold text-[#1a271c]">{profile.entity_name || formatAddress(profile.address, 8)}</div>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {trace.path.map((step) => (
-                        <Badge key={step} variant="outline">
-                          {formatAddress(step, 5)}
-                        </Badge>
-                      ))}
-                    </div>
+                    <Badge className={riskTone(profile.risk_level)}>{profile.risk_level}</Badge>
                   </div>
-                  {traceEdges.map((edge) => (
-                    <div
-                      key={`${edge.hash}:${edge.from}:${edge.to}`}
-                      className="rounded-[22px] border border-[#ecefe8] bg-white p-4"
-                    >
-                      <div className="text-sm font-semibold text-[#132118]">
-                        {formatAddress(edge.from)} → {formatAddress(edge.to)}
-                      </div>
-                      <div className="mt-2 text-sm text-[#5d6a60]">
-                        {formatWeiToEth(edge.value)} · {formatDateTime(edge.timestamp)}
-                      </div>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-[16px] bg-[#f5f7f2] p-3">
+                      <dt className="text-xs text-[#7e887f]">Transactions</dt>
+                      <dd className="font-semibold tabular-nums">{formatExact(profile.total_count)}</dd>
                     </div>
-                  ))}
-                </>
-              ) : (
-                <div className="rounded-[22px] border border-[#ecefe8] bg-[#f5f7f2] p-4 text-sm text-[#6f7b72]">
-                  No target path requested yet. Add a destination address above when you need a concrete route rather than local neighborhood context.
+                    <div className="rounded-[16px] bg-[#f5f7f2] p-3">
+                      <dt className="text-xs text-[#7e887f]">Token transfers</dt>
+                      <dd className="font-semibold tabular-nums">{formatExact(profile.token_transfer_count)}</dd>
+                    </div>
+                  </dl>
+                  <Button asChild variant="secondary" className="mt-4 w-full">
+                    <Link href={`/accounts/${profile.address}`}>
+                      Open profile
+                      <ArrowRight />
+                    </Link>
+                  </Button>
+                </Panel>
+              ) : null}
+
+              <Panel>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+                    <Route className="size-4 text-[#d9771f]" />
+                    Path trace
+                  </div>
+                  <SourceTag engine="neo4j" />
                 </div>
-              )}
+                {!target ? (
+                  <p className="mt-2 text-sm text-[#6f7b72]">Add a destination above to find the shortest directed route to it.</p>
+                ) : traceError ? (
+                  <div className="mt-3">
+                    <Notice tone={traceError.includes("no directed path") ? "info" : "error"}>
+                      {traceError.includes("no directed path")
+                        ? `No directed route within ${hops} hops. Value may not have moved this way, or not within the observed data.`
+                        : traceError}
+                    </Notice>
+                  </div>
+                ) : trace ? (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-sm text-[#56645a]">
+                      {trace.hops} hop{trace.hops === 1 ? "" : "s"} from {formatAddress(trace.from, 4)} to {formatAddress(trace.to, 4)}, highlighted in orange.
+                    </p>
+                    {trace.edges.map((edge, index) => (
+                      <Link
+                        key={`${edge.hash}-${index}`}
+                        href={`/transactions/${edge.hash}`}
+                        className="block rounded-[16px] border border-[#ecefe8] bg-white p-3 transition hover:border-[#e7b98b]"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-mono text-[#1c2a1d]">
+                            {index + 1}. {formatAddress(edge.from, 4)} → {formatAddress(edge.to, 4)}
+                          </span>
+                          <Badge variant="outline">{edge.kind === "eth" ? "ETH" : "token"}</Badge>
+                        </div>
+                        <div className="mt-1 text-xs text-[#6f7b72]">
+                          {edge.kind === "eth" ? formatWeiToEth(edge.value) : formatBaseUnits(edge.value)} · {formatDateTime(edge.timestamp)}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+                <QueryDisclosure query={QUERIES.tracePath} />
+              </Panel>
+
+              <Panel>
+                <div className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+                  <Repeat className="size-4 text-[#2b6631]" />
+                  Recent loops
+                </div>
+                <div className="mt-3">
+                  {loops.error ? <Notice tone="error">{loops.error}</Notice> : <LoopList loops={(loops.data ?? []).slice(0, 3)} />}
+                </div>
+              </Panel>
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
+        </>
+      ) : null}
     </div>
   );
 }

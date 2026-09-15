@@ -13,7 +13,10 @@ import (
 	"forensic-listener/models"
 )
 
-// Neo4j stores address relationships for graph-style investigations.
+// Neo4j stores value flows as a property graph for traversal queries:
+//
+//	(:Account {address})-[:SENT {hash, value, value_eth, timestamp}]->(:Account)
+//	(:Account {address})-[:TRANSFERRED {tx_hash, log_index, token, amount, timestamp}]->(:Account)
 type Neo4j struct {
 	driver neo4j.DriverWithContext
 }
@@ -28,7 +31,24 @@ const (
 	neo4jReadTimeout   = 3 * time.Second
 	neo4jMaxRetryTime  = 5 * time.Second
 	neo4jSchemaTimeout = 2 * time.Minute
+
+	zeroAddress = "0x0000000000000000000000000000000000000000"
 )
+
+// Flow kinds accepted by graph queries, mapped to relationship types.
+var flowRelationshipTypes = map[string]string{
+	"all":   "SENT|TRANSFERRED",
+	"eth":   "SENT",
+	"token": "TRANSFERRED",
+}
+
+// FlowTypes returns the relationship-type expression for a flow kind (default "all").
+func FlowTypes(kind string) string {
+	if types, ok := flowRelationshipTypes[kind]; ok {
+		return types
+	}
+	return flowRelationshipTypes["all"]
+}
 
 func NewNeo4j(ctx context.Context, uri, user, password string) (*Neo4j, error) {
 	return newNeo4j(ctx, uri, user, password, true)
@@ -60,7 +80,6 @@ func newNeo4j(ctx context.Context, uri, user, password string, ensureSchema bool
 	if ensureSchema {
 		schemaCtx, cancel := context.WithTimeout(ctx, neo4jSchemaTimeout)
 		defer cancel()
-
 		if err := store.ensureSchema(schemaCtx); err != nil {
 			_ = driver.Close(context.Background())
 			return nil, fmt.Errorf("ensuring neo4j schema: %w", err)
@@ -74,464 +93,346 @@ func (n *Neo4j) Close() {
 	_ = n.driver.Close(context.Background())
 }
 
+func (n *Neo4j) Ping(ctx context.Context) error {
+	return n.driver.VerifyConnectivity(ctx)
+}
+
 // EnsureSchema enforces the graph constraints required by the application.
 func (n *Neo4j) EnsureSchema(ctx context.Context) error {
 	return n.ensureSchema(ctx)
 }
 
-// DuplicateAccountSummary returns the number of duplicate address groups and extra nodes.
-func (n *Neo4j) DuplicateAccountSummary(ctx context.Context) (int, int, error) {
-	session := n.driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
-	defer session.Close(ctx)
-
-	summaryAny, err := session.ExecuteRead(ctx, func(txn neo4j.ManagedTransaction) (any, error) {
-		result, err := txn.Run(ctx, `
-			MATCH (acct:Account)
-			WHERE acct.address IS NOT NULL
-			WITH acct.address AS address, count(*) AS c
-			WHERE c > 1
-			RETURN count(*) AS duplicate_groups,
-			       coalesce(sum(c - 1), 0) AS extra_nodes
-		`, nil)
-		if err != nil {
-			return nil, err
-		}
-		if !result.Next(ctx) {
-			return [2]int{}, result.Err()
-		}
-
-		record := result.Record()
-		duplicateGroupsValue, _ := record.Get("duplicate_groups")
-		extraNodesValue, _ := record.Get("extra_nodes")
-		return [2]int{
-			toInt(duplicateGroupsValue),
-			toInt(extraNodesValue),
-		}, result.Err()
-	})
-	if err != nil {
-		return 0, 0, fmt.Errorf("loading duplicate account summary: %w", err)
-	}
-	if summaryAny == nil {
-		return 0, 0, nil
-	}
-
-	summary := summaryAny.([2]int)
-	return summary[0], summary[1], nil
-}
-
-// RepairDuplicateAccounts repairs duplicate Account nodes in batches and returns totals.
-func (n *Neo4j) RepairDuplicateAccounts(ctx context.Context, batchSize int) (int, int, error) {
-	if batchSize <= 0 {
-		batchSize = 100
-	}
-
-	repairedGroups := 0
-	repairedNodes := 0
-
-	for ctx.Err() == nil {
-		groups, err := n.duplicateAccountGroups(ctx, batchSize)
-		if err != nil {
-			return repairedGroups, repairedNodes, err
-		}
-		if len(groups) == 0 {
-			return repairedGroups, repairedNodes, nil
-		}
-
-		for _, group := range groups {
-			deleted, err := n.repairAccountGroup(ctx, group.address, group.nodeIDs)
-			if err != nil {
-				return repairedGroups, repairedNodes, err
-			}
-			if deleted == 0 {
-				continue
-			}
-
-			repairedGroups++
-			repairedNodes += deleted
-			if repairedGroups <= 5 || repairedGroups%25 == 0 {
-				log.Printf(
-					"[neo4j] repair-only mode merged duplicate account address %s (%d duplicate nodes removed, groups repaired=%d)",
-					group.address,
-					deleted,
-					repairedGroups,
-				)
-			}
-		}
-
-		remainingGroups, remainingNodes, err := n.DuplicateAccountSummary(ctx)
-		if err != nil {
-			return repairedGroups, repairedNodes, err
-		}
-		log.Printf(
-			"[neo4j] repair-only batch complete (%d groups repaired total, %d nodes removed total, %d groups remaining, %d extra nodes remaining)",
-			repairedGroups,
-			repairedNodes,
-			remainingGroups,
-			remainingNodes,
-		)
-	}
-
-	return repairedGroups, repairedNodes, fmt.Errorf("repairing duplicate account nodes: %w", ctx.Err())
-}
-
-// SaveTransaction upserts accounts and the directed transfer edge between them.
-func (n *Neo4j) SaveTransaction(ctx context.Context, tx *models.Transaction) error {
-	fromAddress := NormalizeAddress(tx.From)
-	toAddress := NormalizeAddress(tx.To)
-	if toAddress == "" {
-		return nil
-	}
-
+func (n *Neo4j) write(ctx context.Context, query string, params map[string]any) error {
 	writeCtx, cancel := context.WithTimeout(ctx, neo4jWriteTimeout)
 	defer cancel()
 
 	session := n.driver.NewSession(writeCtx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close(writeCtx)
 
-	timestamp := tx.Timestamp.Format(time.RFC3339Nano)
-	query := `
-		MERGE (from:Account {address: $from})
-		  ON CREATE SET from.first_seen = datetime($timestamp)
-		SET from.last_seen = datetime($timestamp)
-
-		MERGE (to:Account {address: $to})
-		  ON CREATE SET to.first_seen = datetime($timestamp)
-		SET to.last_seen = datetime($timestamp)
-
-		MERGE (from)-[sent:SENT {hash: $hash}]->(to)
-		SET sent.value = $value,
-		    sent.gas = $gas,
-		    sent.gas_price = $gas_price,
-		    sent.nonce = $nonce,
-		    sent.block_number = $block_number,
-		    sent.timestamp = datetime($timestamp)
-	`
-
 	_, err := session.ExecuteWrite(writeCtx, func(txn neo4j.ManagedTransaction) (any, error) {
-		result, err := txn.Run(writeCtx, query, map[string]any{
-			"from":         fromAddress,
-			"to":           toAddress,
-			"hash":         tx.Hash,
-			"value":        tx.Value,
-			"gas":          int64(tx.Gas),
-			"gas_price":    tx.GasPrice,
-			"nonce":        int64(tx.Nonce),
-			"block_number": int64(tx.BlockNumber),
-			"timestamp":    timestamp,
-		})
+		result, err := txn.Run(writeCtx, query, params)
 		if err != nil {
 			return nil, err
 		}
 		_, err = result.Consume(writeCtx)
 		return nil, err
 	})
+	return err
+}
+
+// SaveTransaction upserts both accounts and the directed :SENT edge between them.
+// MERGE on the transaction hash makes the write idempotent.
+func (n *Neo4j) SaveTransaction(ctx context.Context, tx *models.Transaction) error {
+	from := NormalizeAddress(tx.From)
+	to := NormalizeAddress(tx.To)
+	if to == "" {
+		return nil
+	}
+
+	err := n.write(ctx, `
+		MERGE (from:Account {address: $from})
+		  ON CREATE SET from.first_seen = datetime($timestamp)
+		SET from.last_seen = CASE WHEN from.last_seen IS NULL OR from.last_seen < datetime($timestamp)
+		                          THEN datetime($timestamp) ELSE from.last_seen END
+
+		MERGE (to:Account {address: $to})
+		  ON CREATE SET to.first_seen = datetime($timestamp)
+		SET to.last_seen = CASE WHEN to.last_seen IS NULL OR to.last_seen < datetime($timestamp)
+		                        THEN datetime($timestamp) ELSE to.last_seen END
+
+		MERGE (from)-[sent:SENT {hash: $hash}]->(to)
+		SET sent.value = $value,
+		    sent.value_eth = toFloat($value) / 1.0e18,
+		    sent.nonce = $nonce,
+		    sent.timestamp = datetime($timestamp)
+	`, map[string]any{
+		"from":      from,
+		"to":        to,
+		"hash":      tx.Hash,
+		"value":     tx.Value,
+		"nonce":     int64(tx.Nonce),
+		"timestamp": tx.Timestamp.UTC().Format(time.RFC3339Nano),
+	})
 	if err != nil {
 		return fmt.Errorf("saving transaction %s to neo4j: %w", tx.Hash, err)
 	}
-
 	return nil
 }
 
-// MarkContract flips the graph node into contract mode for downstream analysis.
+// SaveTokenTransfers adds :TRANSFERRED edges between the real sender and recipient of
+// each ERC-20 transfer. Mints and burns (the zero address) are not money flows and are
+// kept out of the graph.
+func (n *Neo4j) SaveTokenTransfers(ctx context.Context, transfers []*models.TokenTransfer) error {
+	rows := make([]map[string]any, 0, len(transfers))
+	for _, tt := range transfers {
+		from, to := NormalizeAddress(tt.From), NormalizeAddress(tt.To)
+		if from == zeroAddress || to == zeroAddress || from == "" || to == "" {
+			continue
+		}
+		rows = append(rows, map[string]any{
+			"from":      from,
+			"to":        to,
+			"tx_hash":   tt.TxHash,
+			"log_index": int64(tt.LogIndex),
+			"token":     NormalizeAddress(tt.Token),
+			"amount":    tt.Amount,
+			"timestamp": tt.MinedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	err := n.write(ctx, `
+		UNWIND $rows AS t
+		MERGE (from:Account {address: t.from})
+		  ON CREATE SET from.first_seen = datetime(t.timestamp)
+		SET from.last_seen = CASE WHEN from.last_seen IS NULL OR from.last_seen < datetime(t.timestamp)
+		                          THEN datetime(t.timestamp) ELSE from.last_seen END
+		MERGE (to:Account {address: t.to})
+		  ON CREATE SET to.first_seen = datetime(t.timestamp)
+		SET to.last_seen = CASE WHEN to.last_seen IS NULL OR to.last_seen < datetime(t.timestamp)
+		                        THEN datetime(t.timestamp) ELSE to.last_seen END
+		MERGE (from)-[r:TRANSFERRED {tx_hash: t.tx_hash, log_index: t.log_index}]->(to)
+		SET r.token = t.token,
+		    r.amount = t.amount,
+		    r.timestamp = datetime(t.timestamp)
+	`, map[string]any{"rows": rows})
+	if err != nil {
+		return fmt.Errorf("saving %d token transfers to neo4j: %w", len(rows), err)
+	}
+	return nil
+}
+
+// MarkContract flags the graph node as a contract.
 func (n *Neo4j) MarkContract(ctx context.Context, address string) error {
 	address = NormalizeAddress(address)
 	if address == "" {
 		return nil
 	}
-
-	writeCtx, cancel := context.WithTimeout(ctx, neo4jWriteTimeout)
-	defer cancel()
-
-	session := n.driver.NewSession(writeCtx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
-	defer session.Close(writeCtx)
-
-	_, err := session.ExecuteWrite(writeCtx, func(txn neo4j.ManagedTransaction) (any, error) {
-		result, err := txn.Run(writeCtx, `
-			MERGE (acct:Account {address: $address})
-			SET acct.is_contract = true
-		`, map[string]any{"address": address})
-		if err != nil {
-			return nil, err
-		}
-		_, err = result.Consume(writeCtx)
-		return nil, err
-	})
-	if err != nil {
+	if err := n.write(ctx, `
+		MERGE (acct:Account {address: $address})
+		SET acct.is_contract = true
+	`, map[string]any{"address": address}); err != nil {
 		return fmt.Errorf("marking contract %s in neo4j: %w", address, err)
 	}
-
 	return nil
 }
 
-// FindReturnPath checks whether the destination already links back to the sender.
-func (n *Neo4j) FindReturnPath(ctx context.Context, from, to string, maxHops int) (*models.CircularFlow, error) {
-	from = NormalizeAddress(from)
-	to = NormalizeAddress(to)
-	if from == "" || to == "" || maxHops < 1 {
-		return nil, nil
-	}
-
+func (n *Neo4j) readSingle(ctx context.Context, query string, params map[string]any) (*neo4j.Record, error) {
 	readCtx, cancel := context.WithTimeout(ctx, neo4jReadTimeout)
 	defer cancel()
 
 	session := n.driver.NewSession(readCtx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
 	defer session.Close(readCtx)
 
-	// Neo4j's shortestPath() raises an error when the start and end nodes are the
-	// same, so use a bounded variable-length pattern and choose the shortest match.
-	query := fmt.Sprintf(`
-		MATCH (dst:Account {address: $to}), (src:Account {address: $from})
-		MATCH p = (dst)-[:SENT*1..%d]->(src)
-		RETURN [n IN nodes(p) | n.address] AS path,
-		       [r IN relationships(p) | r.hash] AS tx_hashes,
-		       length(p) AS hops
-		ORDER BY length(p) ASC
-		LIMIT 1
-	`, maxHops)
-
 	recordAny, err := session.ExecuteRead(readCtx, func(txn neo4j.ManagedTransaction) (any, error) {
-		result, err := txn.Run(readCtx, query, map[string]any{
-			"from": from,
-			"to":   to,
-		})
+		result, err := txn.Run(readCtx, query, params)
 		if err != nil {
 			return nil, err
 		}
-
 		if !result.Next(readCtx) {
 			return nil, result.Err()
 		}
-
 		return result.Record(), result.Err()
 	})
-	if err != nil {
-		return nil, fmt.Errorf("querying circular path %s -> %s: %w", from, to, err)
+	if err != nil || recordAny == nil {
+		return nil, err
 	}
-	if recordAny == nil {
+	return recordAny.(*neo4j.Record), nil
+}
+
+// FindReturnPath looks for value that left `to` and came back to `from` through a
+// time-ordered chain of transfers inside [since, before]: every hop happens no earlier
+// than the one before it. Called when the transfer from -> to closes the loop.
+func (n *Neo4j) FindReturnPath(ctx context.Context, from, to string, since, before time.Time, maxHops int) (*models.CircularFlow, error) {
+	from = NormalizeAddress(from)
+	to = NormalizeAddress(to)
+	if from == "" || to == "" || from == to || maxHops < 1 {
 		return nil, nil
 	}
 
-	record := recordAny.(*neo4j.Record)
+	// maxHops is an integer clamped by the caller; it cannot carry injected Cypher.
+	query := fmt.Sprintf(`
+		MATCH (dst:Account {address: $to}), (src:Account {address: $from})
+		MATCH p = (dst)-[:SENT|TRANSFERRED*1..%d]->(src)
+		WHERE all(r IN relationships(p) WHERE r.timestamp >= datetime($since) AND r.timestamp <= datetime($before))
+		  AND all(i IN range(0, size(relationships(p)) - 2)
+		          WHERE relationships(p)[i].timestamp <= relationships(p)[i + 1].timestamp)
+		RETURN [x IN nodes(p) | x.address] AS path,
+		       [r IN relationships(p) | coalesce(r.hash, r.tx_hash)] AS tx_hashes,
+		       [r IN relationships(p) | CASE type(r) WHEN 'SENT' THEN 'eth' ELSE 'token' END] AS kinds,
+		       length(p) AS hops
+		ORDER BY hops ASC
+		LIMIT 1
+	`, clamp(maxHops, 1, 4))
+
+	record, err := n.readSingle(ctx, query, map[string]any{
+		"from":   from,
+		"to":     to,
+		"since":  since.UTC().Format(time.RFC3339Nano),
+		"before": before.UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying return path %s -> %s: %w", to, from, err)
+	}
+	if record == nil {
+		return nil, nil
+	}
+
 	pathValue, _ := record.Get("path")
 	hashesValue, _ := record.Get("tx_hashes")
+	kindsValue, _ := record.Get("kinds")
 	hopsValue, _ := record.Get("hops")
 
 	return &models.CircularFlow{
 		Path:              toStringSlice(pathValue),
 		TransactionHashes: toStringSlice(hashesValue),
+		Kinds:             toStringSlice(kindsValue),
 		Hops:              toInt(hopsValue),
 	}, nil
 }
 
-// RecentCircularFlows returns a sample of cycles already present in the graph.
-func (n *Neo4j) RecentCircularFlows(ctx context.Context, limit int) ([]*models.CircularFlow, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-
-	readCtx, cancel := context.WithTimeout(ctx, neo4jReadTimeout)
-	defer cancel()
-
-	session := n.driver.NewSession(readCtx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
-	defer session.Close(readCtx)
-
-	flowsAny, err := session.ExecuteRead(readCtx, func(txn neo4j.ManagedTransaction) (any, error) {
-		result, err := txn.Run(readCtx, `
-			MATCH p=(start:Account)-[:SENT*2..3]->(start)
-			RETURN [n IN nodes(p) | n.address] AS path,
-			       [r IN relationships(p) | r.hash] AS tx_hashes,
-			       length(p) AS hops
-			LIMIT $limit
-		`, map[string]any{"limit": limit})
-		if err != nil {
-			return nil, err
-		}
-
-		var flows []*models.CircularFlow
-		for result.Next(readCtx) {
-			record := result.Record()
-
-			pathValue, _ := record.Get("path")
-			hashesValue, _ := record.Get("tx_hashes")
-			hopsValue, _ := record.Get("hops")
-
-			flows = append(flows, &models.CircularFlow{
-				Path:              toStringSlice(pathValue),
-				TransactionHashes: toStringSlice(hashesValue),
-				Hops:              toInt(hopsValue),
-			})
-		}
-
-		return flows, result.Err()
-	})
-	if err != nil {
-		return nil, fmt.Errorf("querying recent circular flows: %w", err)
-	}
-
-	if flowsAny == nil {
-		return nil, nil
-	}
-
-	return flowsAny.([]*models.CircularFlow), nil
-}
-
-// AddressGraph returns a graph neighborhood around a focal address.
-func (n *Neo4j) AddressGraph(ctx context.Context, address string, depth, limit int) (*models.AddressGraph, error) {
+// AddressGraph returns the neighbourhood around an address. The path budget is split
+// evenly across hop levels and each level stops expanding as soon as its budget is
+// met (LIMIT inside the subquery), so a hub cannot trigger an unbounded expansion.
+// The original query collected every path before slicing and exhausted a 1 GB heap
+// at depth 3.
+func (n *Neo4j) AddressGraph(ctx context.Context, address string, depth, limit int, flows string) (*models.AddressGraph, error) {
 	address = NormalizeAddress(address)
 	if address == "" {
 		return nil, nil
 	}
-	if depth < 1 {
-		depth = 1
-	}
-	if depth > 3 {
-		depth = 3
-	}
+	depth = clamp(depth, 1, 3)
 	if limit <= 0 {
-		limit = 50
+		limit = 60
+	}
+	perLevel := (limit + depth - 1) / depth
+	types := FlowTypes(flows)
+
+	branches := make([]string, 0, depth)
+	for d := 1; d <= depth; d++ {
+		branches = append(branches, fmt.Sprintf(`
+			WITH center
+			OPTIONAL MATCH p = (center)-[:%s*%d]-(:Account)
+			RETURN p LIMIT $per_level`, types, d))
 	}
 
-	readCtx, cancel := context.WithTimeout(ctx, neo4jReadTimeout)
-	defer cancel()
-
-	session := n.driver.NewSession(readCtx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
-	defer session.Close(readCtx)
-
-	query := fmt.Sprintf(`
+	query := `
 		MATCH (center:Account {address: $address})
-		OPTIONAL MATCH p=(center)-[:SENT*1..%d]-(other:Account)
-		WITH collect(DISTINCT p)[..$limit] AS paths, center
+		CALL {` + strings.Join(branches, "\n\t\t\tUNION ALL") + `
+		}
+		WITH center, collect(p) AS paths
 		CALL {
 			WITH paths
-			UNWIND [p IN paths WHERE p IS NOT NULL] AS p
-			UNWIND nodes(p) AS n
-			RETURN collect(DISTINCT {
-				id: n.address,
-				label: n.address,
-				is_contract: coalesce(n.is_contract, false)
-			}) AS nodes
+			UNWIND paths AS p
+			UNWIND nodes(p) AS x
+			RETURN collect(DISTINCT {id: x.address, is_contract: coalesce(x.is_contract, false)}) AS nodes
 		}
 		CALL {
 			WITH paths
-			UNWIND [p IN paths WHERE p IS NOT NULL] AS p
+			UNWIND paths AS p
 			UNWIND relationships(p) AS r
 			RETURN collect(DISTINCT {
-				hash: r.hash,
+				kind: CASE type(r) WHEN 'SENT' THEN 'eth' ELSE 'token' END,
+				hash: coalesce(r.hash, r.tx_hash),
+				log_index: r.log_index,
+				token: r.token,
 				from: startNode(r).address,
 				to: endNode(r).address,
-				value: r.value,
+				value: coalesce(r.value, r.amount),
 				timestamp: toString(r.timestamp)
 			}) AS edges
 		}
-		RETURN center.address AS center, nodes, edges
-	`, depth)
+		RETURN center.address AS center, coalesce(center.is_contract, false) AS center_is_contract,
+		       nodes, edges, size(paths) AS path_count
+	`
 
-	graphAny, err := session.ExecuteRead(readCtx, func(txn neo4j.ManagedTransaction) (any, error) {
-		result, err := txn.Run(readCtx, query, map[string]any{
-			"address": address,
-			"limit":   limit,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		if !result.Next(readCtx) {
-			return nil, result.Err()
-		}
-
-		record := result.Record()
-		centerValue, _ := record.Get("center")
-		nodesValue, _ := record.Get("nodes")
-		edgesValue, _ := record.Get("edges")
-
-		return &models.AddressGraph{
-			Center: fmt.Sprint(centerValue),
-			Nodes:  toGraphNodes(nodesValue),
-			Edges:  toGraphEdges(edgesValue),
-		}, result.Err()
-	})
+	record, err := n.readSingle(ctx, query, map[string]any{"address": address, "per_level": perLevel})
 	if err != nil {
 		return nil, fmt.Errorf("querying address graph for %s: %w", address, err)
 	}
-	if graphAny == nil {
+	if record == nil {
 		return nil, nil
 	}
 
-	return graphAny.(*models.AddressGraph), nil
+	centerValue, _ := record.Get("center")
+	centerIsContract, _ := record.Get("center_is_contract")
+	nodesValue, _ := record.Get("nodes")
+	edgesValue, _ := record.Get("edges")
+	pathCount, _ := record.Get("path_count")
+
+	graph := &models.AddressGraph{
+		Center:    fmt.Sprint(centerValue),
+		Nodes:     toGraphNodes(nodesValue),
+		Edges:     toGraphEdges(edgesValue),
+		Truncated: toInt(pathCount) >= perLevel,
+	}
+	hasCenter := false
+	for _, node := range graph.Nodes {
+		if node.ID == graph.Center {
+			hasCenter = true
+			break
+		}
+	}
+	if !hasCenter {
+		graph.Nodes = append(graph.Nodes, models.GraphNode{ID: graph.Center, Label: graph.Center, IsContract: toBool(centerIsContract)})
+	}
+	return graph, nil
 }
 
-// TracePath returns the shortest directed path between two addresses up to maxHops.
-func (n *Neo4j) TracePath(ctx context.Context, from, to string, maxHops int) (*models.AddressTrace, error) {
+// TracePath returns the shortest directed path between two addresses. shortestPath
+// uses a bidirectional breadth-first search and stops at the first hit.
+func (n *Neo4j) TracePath(ctx context.Context, from, to string, maxHops int, flows string) (*models.AddressTrace, error) {
 	from = NormalizeAddress(from)
 	to = NormalizeAddress(to)
-	if from == "" || to == "" || maxHops < 1 {
+	if from == "" || to == "" || from == to || maxHops < 1 {
 		return nil, nil
 	}
-	if maxHops > 4 {
-		maxHops = 4
-	}
-
-	readCtx, cancel := context.WithTimeout(ctx, neo4jReadTimeout)
-	defer cancel()
-
-	session := n.driver.NewSession(readCtx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
-	defer session.Close(readCtx)
 
 	query := fmt.Sprintf(`
 		MATCH (src:Account {address: $from}), (dst:Account {address: $to})
-		MATCH p = (src)-[:SENT*1..%d]->(dst)
-		RETURN [n IN nodes(p) | n.address] AS path,
-		       [r IN relationships(p) | r.hash] AS tx_hashes,
+		MATCH p = shortestPath((src)-[:%s*1..%d]->(dst))
+		RETURN [x IN nodes(p) | x.address] AS path,
+		       [r IN relationships(p) | coalesce(r.hash, r.tx_hash)] AS tx_hashes,
 		       [r IN relationships(p) | {
-		           hash: r.hash,
+		           kind: CASE type(r) WHEN 'SENT' THEN 'eth' ELSE 'token' END,
+		           hash: coalesce(r.hash, r.tx_hash),
+		           log_index: r.log_index,
+		           token: r.token,
 		           from: startNode(r).address,
 		           to: endNode(r).address,
-		           value: r.value,
+		           value: coalesce(r.value, r.amount),
 		           timestamp: toString(r.timestamp)
 		       }] AS edges,
 		       length(p) AS hops
-		ORDER BY length(p) ASC
-		LIMIT 1
-	`, maxHops)
+	`, FlowTypes(flows), clamp(maxHops, 1, 6))
 
-	traceAny, err := session.ExecuteRead(readCtx, func(txn neo4j.ManagedTransaction) (any, error) {
-		result, err := txn.Run(readCtx, query, map[string]any{
-			"from": from,
-			"to":   to,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if !result.Next(readCtx) {
-			return nil, result.Err()
-		}
-
-		record := result.Record()
-		pathValue, _ := record.Get("path")
-		hashesValue, _ := record.Get("tx_hashes")
-		edgesValue, _ := record.Get("edges")
-		hopsValue, _ := record.Get("hops")
-
-		return &models.AddressTrace{
-			From:              from,
-			To:                to,
-			Hops:              toInt(hopsValue),
-			Path:              toStringSlice(pathValue),
-			TransactionHashes: toStringSlice(hashesValue),
-			Edges:             toGraphEdges(edgesValue),
-		}, result.Err()
-	})
+	record, err := n.readSingle(ctx, query, map[string]any{"from": from, "to": to})
 	if err != nil {
 		return nil, fmt.Errorf("querying trace path %s -> %s: %w", from, to, err)
 	}
-	if traceAny == nil {
+	if record == nil {
 		return nil, nil
 	}
 
-	return traceAny.(*models.AddressTrace), nil
+	pathValue, _ := record.Get("path")
+	hashesValue, _ := record.Get("tx_hashes")
+	edgesValue, _ := record.Get("edges")
+	hopsValue, _ := record.Get("hops")
+
+	return &models.AddressTrace{
+		From:              from,
+		To:                to,
+		Hops:              toInt(hopsValue),
+		Path:              toStringSlice(pathValue),
+		TransactionHashes: toStringSlice(hashesValue),
+		Edges:             toGraphEdges(edgesValue),
+	}, nil
 }
 
-// TopHubs returns the highest-degree accounts in the transaction graph.
+// TopHubs returns the highest-degree accounts. COUNT {} on a single typed hop is
+// answered from Neo4j's stored degree counts rather than by walking relationships.
 func (n *Neo4j) TopHubs(ctx context.Context, limit int) ([]*models.HubSummary, error) {
 	if limit <= 0 {
 		limit = 10
@@ -546,24 +447,15 @@ func (n *Neo4j) TopHubs(ctx context.Context, limit int) ([]*models.HubSummary, e
 	hubsAny, err := session.ExecuteRead(readCtx, func(txn neo4j.ManagedTransaction) (any, error) {
 		result, err := txn.Run(readCtx, `
 			MATCH (acct:Account)
-			CALL {
-				WITH acct
-				OPTIONAL MATCH (acct)-[out:SENT]->()
-				RETURN count(out) AS outgoing_count
-			}
-			CALL {
-				WITH acct
-				OPTIONAL MATCH ()-[incoming:SENT]->(acct)
-				RETURN count(incoming) AS incoming_count
-			}
+			WITH acct,
+			     COUNT { (acct)-[:SENT|TRANSFERRED]->() } AS outgoing_count,
+			     COUNT { (acct)<-[:SENT|TRANSFERRED]-() } AS incoming_count
 			WITH acct, outgoing_count, incoming_count, outgoing_count + incoming_count AS degree
 			WHERE degree > 0
 			RETURN acct.address AS address,
 			       coalesce(acct.is_contract, false) AS is_contract,
-			       outgoing_count,
-			       incoming_count,
-			       degree
-			ORDER BY degree DESC, outgoing_count DESC, incoming_count DESC, address ASC
+			       outgoing_count, incoming_count, degree
+			ORDER BY degree DESC, address ASC
 			LIMIT $limit
 		`, map[string]any{"limit": limit})
 		if err != nil {
@@ -588,7 +480,6 @@ func (n *Neo4j) TopHubs(ctx context.Context, limit int) ([]*models.HubSummary, e
 				IsHub:         true,
 			})
 		}
-
 		return hubs, result.Err()
 	})
 	if err != nil {
@@ -597,17 +488,88 @@ func (n *Neo4j) TopHubs(ctx context.Context, limit int) ([]*models.HubSummary, e
 	if hubsAny == nil {
 		return nil, nil
 	}
-
 	return hubsAny.([]*models.HubSummary), nil
+}
+
+// ---------------------------------------------------------------------------
+// Schema and duplicate repair
+// ---------------------------------------------------------------------------
+
+// DuplicateAccountSummary returns the number of duplicate address groups and extra nodes.
+func (n *Neo4j) DuplicateAccountSummary(ctx context.Context) (int, int, error) {
+	session := n.driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
+	defer session.Close(ctx)
+
+	summaryAny, err := session.ExecuteRead(ctx, func(txn neo4j.ManagedTransaction) (any, error) {
+		result, err := txn.Run(ctx, `
+			MATCH (acct:Account)
+			WHERE acct.address IS NOT NULL
+			WITH acct.address AS address, count(*) AS c
+			WHERE c > 1
+			RETURN count(*) AS duplicate_groups, coalesce(sum(c - 1), 0) AS extra_nodes
+		`, nil)
+		if err != nil {
+			return nil, err
+		}
+		if !result.Next(ctx) {
+			return [2]int{}, result.Err()
+		}
+		record := result.Record()
+		groups, _ := record.Get("duplicate_groups")
+		extra, _ := record.Get("extra_nodes")
+		return [2]int{toInt(groups), toInt(extra)}, result.Err()
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("loading duplicate account summary: %w", err)
+	}
+	if summaryAny == nil {
+		return 0, 0, nil
+	}
+	summary := summaryAny.([2]int)
+	return summary[0], summary[1], nil
+}
+
+// RepairDuplicateAccounts repairs duplicate Account nodes in batches and returns totals.
+func (n *Neo4j) RepairDuplicateAccounts(ctx context.Context, batchSize int) (int, int, error) {
+	if batchSize <= 0 {
+		batchSize = 100
+	}
+
+	repairedGroups, repairedNodes := 0, 0
+	for ctx.Err() == nil {
+		groups, err := n.duplicateAccountGroups(ctx, batchSize)
+		if err != nil {
+			return repairedGroups, repairedNodes, err
+		}
+		if len(groups) == 0 {
+			return repairedGroups, repairedNodes, nil
+		}
+
+		for _, group := range groups {
+			deleted, err := n.repairAccountGroup(ctx, group.address, group.nodeIDs)
+			if err != nil {
+				return repairedGroups, repairedNodes, err
+			}
+			if deleted == 0 {
+				continue
+			}
+			repairedGroups++
+			repairedNodes += deleted
+			if repairedGroups <= 5 || repairedGroups%25 == 0 {
+				log.Printf("[neo4j] merged duplicate account %s (%d nodes removed, groups repaired=%d)",
+					group.address, deleted, repairedGroups)
+			}
+		}
+	}
+
+	return repairedGroups, repairedNodes, fmt.Errorf("repairing duplicate account nodes: %w", ctx.Err())
 }
 
 func (n *Neo4j) ensureSchema(ctx context.Context) error {
 	session := n.driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close(ctx)
 
-	repairedGroups := 0
-	repairedNodes := 0
-
+	repairedGroups, repairedNodes := 0, 0
 	for ctx.Err() == nil {
 		_, err := session.ExecuteWrite(ctx, func(txn neo4j.ManagedTransaction) (any, error) {
 			result, err := txn.Run(ctx, `
@@ -623,11 +585,8 @@ func (n *Neo4j) ensureSchema(ctx context.Context) error {
 		})
 		if err == nil {
 			if repairedGroups > 0 {
-				log.Printf(
-					"[neo4j] repaired %d duplicate account groups and removed %d nodes before enforcing schema",
-					repairedGroups,
-					repairedNodes,
-				)
+				log.Printf("[neo4j] repaired %d duplicate account groups (%d nodes) before enforcing schema",
+					repairedGroups, repairedNodes)
 			}
 			return nil
 		}
@@ -636,7 +595,6 @@ func (n *Neo4j) ensureSchema(ctx context.Context) error {
 		if !ok {
 			return fmt.Errorf("creating account address constraint: %w", err)
 		}
-
 		deleted, repairErr := n.repairDuplicateAccountAddress(ctx, address)
 		if repairErr != nil {
 			return fmt.Errorf("repairing duplicate account nodes for %s: %w", address, repairErr)
@@ -644,17 +602,8 @@ func (n *Neo4j) ensureSchema(ctx context.Context) error {
 		if deleted == 0 {
 			return fmt.Errorf("creating account address constraint: %w", err)
 		}
-
 		repairedGroups++
 		repairedNodes += deleted
-		if repairedGroups <= 5 || repairedGroups%25 == 0 {
-			log.Printf(
-				"[neo4j] repaired duplicate account address %s (%d duplicate nodes removed, groups repaired=%d)",
-				address,
-				deleted,
-				repairedGroups,
-			)
-		}
 	}
 
 	return fmt.Errorf("creating account address constraint: context ended before duplicate repair completed: %w", ctx.Err())
@@ -666,78 +615,58 @@ func (n *Neo4j) repairAccountGroup(ctx context.Context, address string, nodeIDs 
 		return 0, nil
 	}
 
-	sort.Slice(nodeIDs, func(i, j int) bool {
-		return nodeIDs[i] < nodeIDs[j]
-	})
-
+	sort.Slice(nodeIDs, func(i, j int) bool { return nodeIDs[i] < nodeIDs[j] })
 	keepID := nodeIDs[0]
 	duplicateIDs := append([]int64(nil), nodeIDs[1:]...)
+	if len(duplicateIDs) == 0 {
+		return 0, nil
+	}
 
 	session := n.driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close(ctx)
 
 	_, err := session.ExecuteWrite(ctx, func(txn neo4j.ManagedTransaction) (any, error) {
-		if len(duplicateIDs) == 0 {
-			result, err := txn.Run(ctx, `
-				MATCH (keep:Account)
-				WHERE id(keep) = $keep_id
-				SET keep.address = $address
-			`, map[string]any{
-				"keep_id": keepID,
-				"address": address,
-			})
-			if err != nil {
-				return nil, err
-			}
-			_, err = result.Consume(ctx)
-			return nil, err
-		}
-
 		result, err := txn.Run(ctx, `
-			MATCH (keep:Account)
-			WHERE id(keep) = $keep_id
+			MATCH (keep:Account) WHERE id(keep) = $keep_id
 			UNWIND $duplicate_ids AS duplicate_id
-			MATCH (dup:Account)
-			WHERE id(dup) = duplicate_id
+			MATCH (dup:Account) WHERE id(dup) = duplicate_id
 			CALL {
 				WITH keep, dup
 				OPTIONAL MATCH (dup)-[r:SENT]->(target:Account)
-				WITH keep, r, target
-				WHERE r IS NOT NULL
+				WITH keep, r, target WHERE r IS NOT NULL
 				MERGE (keep)-[merged:SENT {hash: r.hash}]->(target)
 				SET merged += properties(r)
-				RETURN count(*) AS moved_outgoing
+				RETURN count(*) AS moved_sent_out
 			}
 			CALL {
 				WITH keep, dup
 				OPTIONAL MATCH (source:Account)-[r:SENT]->(dup)
-				WITH keep, source, r
-				WHERE r IS NOT NULL
+				WITH keep, source, r WHERE r IS NOT NULL
 				MERGE (source)-[merged:SENT {hash: r.hash}]->(keep)
 				SET merged += properties(r)
-				RETURN count(*) AS moved_incoming
+				RETURN count(*) AS moved_sent_in
+			}
+			CALL {
+				WITH keep, dup
+				OPTIONAL MATCH (dup)-[r:TRANSFERRED]->(target:Account)
+				WITH keep, r, target WHERE r IS NOT NULL
+				MERGE (keep)-[merged:TRANSFERRED {tx_hash: r.tx_hash, log_index: r.log_index}]->(target)
+				SET merged += properties(r)
+				RETURN count(*) AS moved_transfers_out
+			}
+			CALL {
+				WITH keep, dup
+				OPTIONAL MATCH (source:Account)-[r:TRANSFERRED]->(dup)
+				WITH keep, source, r WHERE r IS NOT NULL
+				MERGE (source)-[merged:TRANSFERRED {tx_hash: r.tx_hash, log_index: r.log_index}]->(keep)
+				SET merged += properties(r)
+				RETURN count(*) AS moved_transfers_in
 			}
 			SET keep.address = $address,
-			    keep.is_contract = coalesce(keep.is_contract, false) OR coalesce(dup.is_contract, false),
-			    keep.first_seen = CASE
-			    	WHEN keep.first_seen IS NULL THEN dup.first_seen
-			    	WHEN dup.first_seen IS NULL THEN keep.first_seen
-			    	WHEN dup.first_seen < keep.first_seen THEN dup.first_seen
-			    	ELSE keep.first_seen
-			    END,
-			    keep.last_seen = CASE
-			    	WHEN keep.last_seen IS NULL THEN dup.last_seen
-			    	WHEN dup.last_seen IS NULL THEN keep.last_seen
-			    	WHEN dup.last_seen > keep.last_seen THEN dup.last_seen
-			    	ELSE keep.last_seen
-			    END
+			    keep.is_contract = coalesce(keep.is_contract, false) OR coalesce(dup.is_contract, false)
 			WITH dup
 			DETACH DELETE dup
-		`, map[string]any{
-			"keep_id":       keepID,
-			"duplicate_ids": duplicateIDs,
-			"address":       address,
-		})
+		`, map[string]any{"keep_id": keepID, "duplicate_ids": duplicateIDs, "address": address})
 		if err != nil {
 			return nil, err
 		}
@@ -747,7 +676,6 @@ func (n *Neo4j) repairAccountGroup(ctx context.Context, address string, nodeIDs 
 	if err != nil {
 		return 0, fmt.Errorf("repairing account node group for %s: %w", address, err)
 	}
-
 	return len(duplicateIDs), nil
 }
 
@@ -760,10 +688,6 @@ func (n *Neo4j) repairDuplicateAccountAddress(ctx context.Context, address strin
 }
 
 func (n *Neo4j) duplicateAccountGroups(ctx context.Context, limit int) ([]accountDuplicateGroup, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-
 	session := n.driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
 	defer session.Close(ctx)
 
@@ -785,34 +709,18 @@ func (n *Neo4j) duplicateAccountGroups(ctx context.Context, limit int) ([]accoun
 		for result.Next(ctx) {
 			record := result.Record()
 			addressValue, _ := record.Get("address")
-			nodeIDsValue, _ := record.Get("node_ids")
-
+			idsValue, _ := record.Get("node_ids")
 			address := NormalizeAddress(fmt.Sprint(addressValue))
-			if address == "" {
-				continue
-			}
-
-			var nodeIDs []int64
-			switch ids := nodeIDsValue.(type) {
-			case []any:
-				nodeIDs = make([]int64, 0, len(ids))
-				for _, id := range ids {
-					nodeIDs = append(nodeIDs, toInt64(id))
+			var ids []int64
+			if raw, ok := idsValue.([]any); ok {
+				for _, id := range raw {
+					ids = append(ids, toInt64(id))
 				}
-			case []int64:
-				nodeIDs = append(nodeIDs, ids...)
 			}
-
-			if len(nodeIDs) <= 1 {
-				continue
+			if address != "" && len(ids) > 1 {
+				groups = append(groups, accountDuplicateGroup{address: address, nodeIDs: ids})
 			}
-
-			groups = append(groups, accountDuplicateGroup{
-				address: address,
-				nodeIDs: nodeIDs,
-			})
 		}
-
 		return groups, result.Err()
 	})
 	if err != nil {
@@ -821,65 +729,59 @@ func (n *Neo4j) duplicateAccountGroups(ctx context.Context, limit int) ([]accoun
 	if groupsAny == nil {
 		return nil, nil
 	}
-
 	return groupsAny.([]accountDuplicateGroup), nil
 }
 
 func (n *Neo4j) accountNodeIDsByAddress(ctx context.Context, address string) ([]int64, error) {
-	address = NormalizeAddress(address)
-	if address == "" {
-		return nil, nil
-	}
-
 	session := n.driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
 	defer session.Close(ctx)
 
-	nodeIDsAny, err := session.ExecuteRead(ctx, func(txn neo4j.ManagedTransaction) (any, error) {
+	idsAny, err := session.ExecuteRead(ctx, func(txn neo4j.ManagedTransaction) (any, error) {
 		result, err := txn.Run(ctx, `
 			MATCH (acct:Account {address: $address})
-			RETURN id(acct) AS node_id
-			ORDER BY node_id ASC
-		`, map[string]any{"address": address})
+			RETURN id(acct) AS node_id ORDER BY node_id
+		`, map[string]any{"address": NormalizeAddress(address)})
 		if err != nil {
 			return nil, err
 		}
-
-		var nodeIDs []int64
+		var ids []int64
 		for result.Next(ctx) {
-			record := result.Record()
-			nodeIDValue, _ := record.Get("node_id")
-			nodeIDs = append(nodeIDs, toInt64(nodeIDValue))
+			value, _ := result.Record().Get("node_id")
+			ids = append(ids, toInt64(value))
 		}
-
-		return nodeIDs, result.Err()
+		return ids, result.Err()
 	})
 	if err != nil {
 		return nil, fmt.Errorf("loading account node ids for %s: %w", address, err)
 	}
-	if nodeIDsAny == nil {
+	if idsAny == nil {
 		return nil, nil
 	}
-
-	return nodeIDsAny.([]int64), nil
+	return idsAny.([]int64), nil
 }
 
 func duplicateAccountAddress(err error) (string, bool) {
 	const marker = "property `address` = '"
-
 	message := err.Error()
 	start := strings.Index(message, marker)
 	if start == -1 {
 		return "", false
 	}
 	start += len(marker)
-
 	end := strings.Index(message[start:], "'")
 	if end == -1 {
 		return "", false
 	}
-
 	address := NormalizeAddress(message[start : start+end])
 	return address, address != ""
+}
+
+// ---------------------------------------------------------------------------
+// Value conversion helpers
+// ---------------------------------------------------------------------------
+
+func clamp(v, lo, hi int) int {
+	return max(lo, min(hi, v))
 }
 
 func toStringSlice(value any) []string {
@@ -892,25 +794,15 @@ func toStringSlice(value any) []string {
 			out = append(out, fmt.Sprint(item))
 		}
 		return out
+	case nil:
+		return nil
 	default:
-		if v == nil {
-			return nil
-		}
 		return []string{fmt.Sprint(v)}
 	}
 }
 
 func toInt(value any) int {
-	switch v := value.(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	case int32:
-		return int(v)
-	default:
-		return 0
-	}
+	return int(toInt64(value))
 }
 
 func toInt64(value any) int64 {
@@ -926,12 +818,16 @@ func toInt64(value any) int64 {
 	}
 }
 
+func toBool(value any) bool {
+	v, ok := value.(bool)
+	return ok && v
+}
+
 func toGraphNodes(value any) []models.GraphNode {
 	raw, ok := value.([]any)
 	if !ok {
 		return nil
 	}
-
 	nodes := make([]models.GraphNode, 0, len(raw))
 	for _, item := range raw {
 		entry, ok := item.(map[string]any)
@@ -940,7 +836,7 @@ func toGraphNodes(value any) []models.GraphNode {
 		}
 		nodes = append(nodes, models.GraphNode{
 			ID:         fmt.Sprint(entry["id"]),
-			Label:      fmt.Sprint(entry["label"]),
+			Label:      fmt.Sprint(entry["id"]),
 			IsContract: toBool(entry["is_contract"]),
 		})
 	}
@@ -952,27 +848,30 @@ func toGraphEdges(value any) []models.GraphEdge {
 	if !ok {
 		return nil
 	}
-
 	edges := make([]models.GraphEdge, 0, len(raw))
 	for _, item := range raw {
 		entry, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		edges = append(edges, models.GraphEdge{
+		edge := models.GraphEdge{
+			Kind:      fmt.Sprint(entry["kind"]),
 			Hash:      fmt.Sprint(entry["hash"]),
 			From:      fmt.Sprint(entry["from"]),
 			To:        fmt.Sprint(entry["to"]),
 			Value:     fmt.Sprint(entry["value"]),
 			Timestamp: parseGraphTime(entry["timestamp"]),
-		})
+		}
+		if token, ok := entry["token"].(string); ok {
+			edge.Token = token
+		}
+		if logIndex, ok := entry["log_index"].(int64); ok {
+			li := int(logIndex)
+			edge.LogIndex = &li
+		}
+		edges = append(edges, edge)
 	}
 	return edges
-}
-
-func toBool(value any) bool {
-	v, ok := value.(bool)
-	return ok && v
 }
 
 func parseGraphTime(value any) time.Time {
