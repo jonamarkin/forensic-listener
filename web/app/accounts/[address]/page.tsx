@@ -1,483 +1,388 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  Brain,
-  FileCode2,
-  Flag,
-  Network,
-  Waves,
-} from "lucide-react";
+import { AlertTriangle, ArrowRight, Brain, Coins, FileCode2, Flag, Network, Tag, Waves } from "lucide-react";
 
-import { LineChart } from "@/components/dashboard/line-chart";
+import { LabelForm } from "@/components/dashboard/label-form";
+import { HourlyBars } from "@/components/dashboard/line-chart";
+import { QueryDisclosure } from "@/components/dashboard/query-disclosure";
+import { type Engine, SourceTag } from "@/components/dashboard/source-tag";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { maybeApiFetch } from "@/lib/api";
-import type {
-  AccountBehaviorProfile,
-  AccountProfile,
-  AccountVelocityPoint,
-  SimilarAccountMatch,
-} from "@/lib/types";
+import { apiResult } from "@/lib/api";
+import { FLAG_LABELS } from "@/lib/flags";
+import { QUERIES } from "@/lib/queries";
+import type { AccountBehaviorProfile, AccountProfile, AccountVelocityPoint, SimilarAccountMatch } from "@/lib/types";
 import {
   entityTone,
   formatAddress,
-  formatCount,
+  formatBaseUnits,
   formatDateTime,
+  formatExact,
+  formatRelativeTime,
   formatSimilarity,
   formatWeiToEth,
   riskTone,
+  statusTone,
+  txKind,
 } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-type RouteParams = Promise<{
-  address: string;
-}>;
+type RouteParams = Promise<{ address: string }>;
 
-function formatFeatureLabel(name: string) {
-  return name
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
+const FEATURES: { key: string; label: string; format: (v: number) => string }[] = [
+  { key: "sent_count", label: "Transactions sent", format: (v) => formatExact(v) },
+  { key: "received_count", label: "Transactions received", format: (v) => formatExact(v) },
+  { key: "send_receive_balance", label: "Send / receive balance", format: (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)} (+1 only sends)` },
+  { key: "avg_sent_eth", label: "Average value sent", format: (v) => `${v.toFixed(4)} ETH` },
+  { key: "avg_gas_price_gwei", label: "Average max fee", format: (v) => `${v.toFixed(2)} gwei` },
+  { key: "counterparty_diversity", label: "Distinct counterparties per tx", format: (v) => `${(v * 100).toFixed(0)}%` },
+  { key: "contract_call_ratio", label: "Sent txs calling contracts", format: (v) => `${(v * 100).toFixed(0)}%` },
+  { key: "recent_burst_ratio", label: "Last-hour share of last 24 h", format: (v) => `${(v * 100).toFixed(0)}%` },
+  { key: "night_ratio", label: "Active 00:00–05:59 UTC", format: (v) => `${(v * 100).toFixed(0)}%` },
+  { key: "weekend_ratio", label: "Active at weekends", format: (v) => `${(v * 100).toFixed(0)}%` },
+  { key: "active_span_hours", label: "Active span", format: (v) => (v >= 48 ? `${(v / 24).toFixed(1)} days` : `${v.toFixed(1)} hours`) },
+];
 
-function formatFeatureValue(value: number) {
-  return value >= 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
-}
-
-function DossierMetric({
-  label,
-  value,
-  detail,
+function Card({
+  icon,
+  title,
+  description,
+  engine,
+  children,
 }: {
-  label: string;
-  value: string;
-  detail: string;
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  engine?: Engine;
+  children: React.ReactNode;
 }) {
   return (
-    <Card className="bg-white/82 shadow-none">
-      <CardContent className="pt-5">
-        <div className="text-[11px] uppercase tracking-[0.2em] text-[#7b887d]">
-          {label}
+    <section className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-[#1a271c]">
+            <span className="text-[#2b6631]">{icon}</span>
+            {title}
+          </h2>
+          {description ? <p className="mt-1 text-sm text-[#7b867c]">{description}</p> : null}
         </div>
-        <div className="mt-3 text-2xl font-semibold text-[#132118]">{value}</div>
-        <div className="mt-2 text-sm text-[#6c786d]">{detail}</div>
-      </CardContent>
-    </Card>
+        {engine ? <SourceTag engine={engine} /> : null}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
-export default async function AccountPage({
-  params,
-}: {
-  params: RouteParams;
-}) {
+function Empty({ children }: { children: React.ReactNode }) {
+  return <div className="rounded-[20px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-5 text-sm leading-6 text-[#627065]">{children}</div>;
+}
+
+function Tile({ label, value, detail, engine }: { label: string; value: string; detail: string; engine: Engine }) {
+  return (
+    <div className="rounded-[22px] border border-[#e8ebe4] bg-[#fdfefb] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#8a948b]">{label}</span>
+        <SourceTag engine={engine} />
+      </div>
+      <div className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-[#152319]">{value}</div>
+      <div className="mt-1 text-xs text-[#7b867c]">{detail}</div>
+    </div>
+  );
+}
+
+export default async function AccountPage({ params }: { params: RouteParams }) {
   const { address } = await params;
 
-  const [profile, behavior, similar, velocity] = await Promise.all([
-    maybeApiFetch<AccountProfile>(`/accounts/${encodeURIComponent(address)}/profile`),
-    maybeApiFetch<AccountBehaviorProfile>(
-      `/accounts/${encodeURIComponent(address)}/behavior`,
-    ),
-    maybeApiFetch<SimilarAccountMatch[]>(
-      `/accounts/${encodeURIComponent(address)}/similar?limit=8`,
-    ),
-    maybeApiFetch<AccountVelocityPoint[]>(
-      `/accounts/${encodeURIComponent(address)}/velocity?hours=72&bucket=hour`,
-    ),
+  const [profileResult, behaviorResult, similarResult, velocityResult] = await Promise.all([
+    apiResult<AccountProfile>(`/accounts/${encodeURIComponent(address)}/profile`),
+    apiResult<AccountBehaviorProfile>(`/accounts/${encodeURIComponent(address)}/behavior`),
+    apiResult<SimilarAccountMatch[]>(`/accounts/${encodeURIComponent(address)}/similar?limit=6`),
+    apiResult<AccountVelocityPoint[]>(`/accounts/${encodeURIComponent(address)}/velocity?hours=72`),
   ]);
 
+  const profile = profileResult.data;
   if (!profile) {
+    const title =
+      profileResult.status === 400 ? "That is not a valid address." : profileResult.status === 404 ? "This address has not been observed." : "The profile could not be loaded.";
+    const detail =
+      profileResult.status === 404
+        ? "Forensic Listener only knows addresses that appeared in transactions it has ingested."
+        : profileResult.error;
     return (
-      <div className="space-y-6 pb-10">
-        <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-3">
-            <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[#6c796f]">
-              Account Profile
-            </p>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#132118] sm:text-4xl">
-                Address not found.
-              </h1>
-              <p className="max-w-2xl text-sm leading-7 text-[#59675d]">
-                The requested address is not available from the forensic backend
-                right now.
-              </p>
-            </div>
-          </div>
-          <Button asChild variant="secondary">
-            <Link href="/overview">
-              Back to overview
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        </section>
+      <div className="space-y-4 pb-10">
+        <h1 className="text-3xl font-semibold tracking-tight text-[#132118]">{title}</h1>
+        <p className="max-w-2xl text-sm leading-7 text-[#59675d]">{detail}</p>
+        <p className="font-mono text-sm text-[#59675d] [overflow-wrap:anywhere]">{address}</p>
+        <Button asChild variant="secondary">
+          <Link href="/overview">Back to overview</Link>
+        </Button>
       </div>
     );
   }
 
-  const topFeatures = Object.entries(behavior?.features || {})
-    .sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]))
-    .slice(0, 5);
-  const velocityValues = (velocity || []).map((point) => point.total_count);
-  const totalCounterpartyValue = profile.counterparties.reduce((sum, item) => {
-    try {
-      return sum + BigInt(item.total_value || "0");
-    } catch {
-      return sum;
-    }
-  }, BigInt(0));
-  const topCounterparties = profile.counterparties.slice(0, 4);
-  const recentTransactions = profile.recent_transactions.slice(0, 4);
-  const similarMatches = (similar || []).slice(0, 4);
+  const behavior = behaviorResult.data;
+  const similar = similarResult.data ?? [];
+  const velocity = velocityResult.data ?? [];
+  const riskReason =
+    profile.risk_level === "none"
+      ? "No curated label or forensic flag indicates risk."
+      : profile.label_risk === profile.risk_level && profile.flag_risk !== profile.risk_level
+        ? `Set by the ${profile.label_source || "curated"} label (${profile.label_risk}).`
+        : profile.flag_risk === profile.risk_level && profile.label_risk !== profile.risk_level
+          ? `Set by its most severe forensic flag (${profile.flag_risk}).`
+          : `Label and flags both indicate ${profile.risk_level} risk.`;
 
   return (
     <div className="space-y-6 pb-10">
       <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div className="space-y-4">
-          <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[#6c796f]">
-            Account Profile
-          </p>
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Badge className={entityTone(profile.entity_type)}>
-                {profile.entity_type || (profile.is_contract ? "contract" : "wallet")}
-              </Badge>
-              <Badge className={riskTone(profile.risk_level)}>
-                {profile.risk_level || "observed"}
-              </Badge>
-              <Badge className={profile.is_hub ? "bg-[#dceff0] text-[#1f6171] border-[#b8dfe1]" : "bg-[#eef1ea] text-[#4d5a50] border-[#dbe3d8]"}>
-                {profile.is_hub ? "graph hub" : "standard node"}
-              </Badge>
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#132118] sm:text-4xl">
-                {profile.entity_name || formatAddress(profile.address, 10)}
-              </h1>
-              <p className="max-w-3xl text-sm leading-7 text-[#59675d]">
-                Investigator-facing view for lifecycle, counterparties, recent
-                transactions, graph context, and behavioral similarity tied to
-                this Ethereum address.
-              </p>
-            </div>
-            <div className="rounded-[24px] border border-[#dbe3d8] bg-white/78 px-4 py-3">
-              <div className="font-mono text-sm text-[#2a382f] [overflow-wrap:anywhere]">
-                {profile.address}
-              </div>
-            </div>
+        <div className="min-w-0 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge className={entityTone(profile.entity_type)}>{profile.entity_type}</Badge>
+            <Badge className={riskTone(profile.risk_level)}>{profile.risk_level === "none" ? "no risk signals" : `${profile.risk_level} risk`}</Badge>
+            {profile.is_hub ? <Badge variant="outline">labelled hub</Badge> : null}
           </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-[#132118] sm:text-4xl">
+            {profile.entity_name || formatAddress(profile.address, 10)}
+          </h1>
+          <p className="font-mono text-sm text-[#2a382f] [overflow-wrap:anywhere]">{profile.address}</p>
+          <p className="text-sm text-[#6b776d]">
+            First observed {formatDateTime(profile.first_seen)} · last active {formatRelativeTime(profile.last_seen)}
+          </p>
         </div>
-
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="secondary">
-            <Link href={`/graph?address=${encodeURIComponent(profile.address)}&depth=2`}>
+            <Link href={`/graph?address=${profile.address}&depth=2`}>
               View in graph
-              <Network className="size-4" />
+              <Network />
             </Link>
           </Button>
           {profile.is_contract ? (
-            <Button asChild variant="secondary">
-              <Link href={`/contracts/${encodeURIComponent(profile.address)}`}>
+            <Button asChild>
+              <Link href={`/contracts/${profile.address}`}>
                 Contract analysis
-                <FileCode2 className="size-4" />
+                <FileCode2 />
               </Link>
             </Button>
           ) : null}
-          <Button asChild>
-            <Link href={`/graph?address=${encodeURIComponent(profile.address)}&depth=3`}>
-              Trace 3 hops
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DossierMetric
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Tile
           label="Balance"
-          value={formatWeiToEth(profile.balance)}
-          detail={`${formatCount(profile.total_count)} observed transactions`}
+          value={profile.balance ? formatWeiToEth(profile.balance, 3) : "Unavailable"}
+          detail={profile.balance ? "read live from the node" : "the node did not answer"}
+          engine="node"
         />
-        <DossierMetric
-          label="High-severity flags"
-          value={formatCount(profile.high_severity_flag_count)}
-          detail={`${formatCount(profile.flag_count)} flags total`}
-        />
-        <DossierMetric
-          label="Counterparties"
-          value={formatCount(profile.counterparties.length)}
-          detail={`${formatWeiToEth(totalCounterpartyValue.toString())} observed value`}
-        />
-        <DossierMetric
-          label="Total sent"
-          value={formatWeiToEth(profile.total_sent)}
-          detail={`${formatCount(profile.sent_count)} outbound transfers`}
-        />
+        <Tile label="Transactions" value={formatExact(profile.total_count)} detail={`${formatExact(profile.sent_count)} sent · ${formatExact(profile.received_count)} received`} engine="postgres" />
+        <Tile label="Counterparties" value={formatExact(profile.counterparty_count)} detail="distinct addresses transacted with" engine="postgres" />
+        <Tile label="Token transfers" value={formatExact(profile.token_transfer_count)} detail="ERC-20 transfers in or out" engine="postgres" />
+        <Tile label="Flags" value={formatExact(profile.flag_count)} detail={`${formatExact(profile.high_severity_flag_count)} high severity`} engine="postgres" />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.28fr)_360px]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_380px]">
         <div className="space-y-6">
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <Flag className="size-5" />
-                <CardTitle className="text-[#132118]">Analyst brief</CardTitle>
+          <Card icon={<Flag className="size-4" />} title="Forensic flags" description="Detections raised against this address." engine="postgres">
+            {profile.flags.length ? (
+              <div className="space-y-3">
+                {profile.flags.map((flag) => (
+                  <Link key={flag.id} href={`/transactions/${flag.tx_hash}`} className="block rounded-[20px] border border-[#ecefe8] bg-white p-4 transition hover:border-[#b4cda8]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-[#172318]">{FLAG_LABELS[flag.flag_type] ?? flag.flag_type}</div>
+                        <div className="mt-1 text-sm text-[#5f6b61] [overflow-wrap:anywhere]">{flag.description}</div>
+                      </div>
+                      <Badge className={riskTone(flag.severity)}>{flag.severity}</Badge>
+                    </div>
+                    <div className="mt-2 text-xs text-[#7e887f]">{formatRelativeTime(flag.detected_at)}</div>
+                  </Link>
+                ))}
               </div>
-              <CardDescription>
-                Core account context.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
-                <div className="text-sm font-semibold text-[#132118]">Lifecycle</div>
-                <div className="mt-3 space-y-2 text-sm text-[#566357]">
-                  <div>First seen: {formatDateTime(profile.first_seen)}</div>
-                  <div>Last seen: {formatDateTime(profile.last_seen)}</div>
-                  <div>Sent transfers: {formatCount(profile.sent_count)}</div>
-                  <div>Received transfers: {formatCount(profile.received_count)}</div>
-                </div>
-              </div>
-              <div className="rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4">
-                <div className="text-sm font-semibold text-[#132118]">
-                  Classification
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-[#566357]">
-                  <div>Entity label: {profile.entity_name || "Unlabeled"}</div>
-                  <div>Risk level: {profile.risk_level || "Unknown"}</div>
-                  <div>Contract account: {profile.is_contract ? "yes" : "no"}</div>
-                  <div>{profile.is_hub ? "High-degree hub behavior observed." : "No hub designation currently stored."}</div>
-                </div>
-              </div>
-            </CardContent>
+            ) : (
+              <Empty>No flags have been raised against this address.</Empty>
+            )}
           </Card>
 
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <ArrowRight className="size-5" />
-                <CardTitle className="text-[#132118]">Recent transactions</CardTitle>
+          <Card icon={<ArrowRight className="size-4" />} title="Recent transactions" description="Latest transactions sent or received." engine="postgres">
+            {profile.recent_transactions.length ? (
+              <div className="overflow-x-auto rounded-[18px] border border-[#ecefe8]">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-[#f3f5f1] text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-[#909b91]">
+                    <tr>
+                      <th className="px-3 py-2.5">Direction</th>
+                      <th className="px-3 py-2.5">Counterparty</th>
+                      <th className="px-3 py-2.5 text-right">Value</th>
+                      <th className="px-3 py-2.5">Status</th>
+                      <th className="px-3 py-2.5">Seen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profile.recent_transactions.map((tx) => {
+                      const outbound = tx.from.toLowerCase() === profile.address.toLowerCase();
+                      const counterparty = outbound ? tx.to : tx.from;
+                      return (
+                        <tr key={tx.hash} className="border-t border-[#edf0e9] bg-white">
+                          <td className="px-3 py-2.5">
+                            <Link href={`/transactions/${tx.hash}`} className="font-medium text-[#1d2b1e] hover:underline">
+                              {outbound ? "Out" : "In"}
+                            </Link>
+                            <div className="text-[11px] text-[#8a948b]">{txKind(tx)}</div>
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-xs">
+                            {counterparty ? <Link href={`/accounts/${counterparty}`} className="hover:underline">{formatAddress(counterparty, 5)}</Link> : "new contract"}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{formatWeiToEth(tx.value, 3)}</td>
+                          <td className="px-3 py-2.5">
+                            <Badge className={statusTone(tx.status)}>{tx.status}</Badge>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-xs text-[#5b685d]">{formatRelativeTime(tx.timestamp)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <CardDescription>
-                Recent transfers involving this address.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {recentTransactions.length ? (
-                recentTransactions.map((tx) => {
-                  const direction =
-                    tx.from.toLowerCase() === profile.address.toLowerCase()
-                      ? "Outbound"
-                      : "Inbound";
-                  const counterparty =
-                    direction === "Outbound" ? tx.to || "Contract creation" : tx.from;
+            ) : (
+              <Empty>No transactions involving this address have been stored.</Empty>
+            )}
+          </Card>
 
+          <Card icon={<Coins className="size-4" />} title="Token transfers" description="ERC-20 Transfer events where this address is the sender or recipient." engine="postgres">
+            {profile.recent_token_transfers.length ? (
+              <div className="space-y-2">
+                {profile.recent_token_transfers.map((tt) => {
+                  const outbound = tt.from.toLowerCase() === profile.address.toLowerCase();
+                  const other = outbound ? tt.to : tt.from;
                   return (
-                    <Link
-                      key={tx.hash}
-                      href={`/transactions/${encodeURIComponent(tx.hash)}`}
-                      className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-[#132118]">
-                            {direction} · {formatWeiToEth(tx.value)}
-                          </div>
-                          <div className="mt-1 font-mono text-xs text-[#607065]">
-                            {formatAddress(counterparty, 8)}
-                          </div>
-                          <div className="mt-2 text-xs text-[#728076]">
-                            {formatDateTime(tx.timestamp)}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-mono text-xs text-[#607065]">
-                            {formatAddress(tx.hash, 8)}
-                          </div>
-                          <div className="mt-2 text-xs text-[#728076]">
-                            Block {tx.block_number}
-                          </div>
-                        </div>
-                      </div>
+                    <Link key={`${tt.tx_hash}-${tt.log_index}`} href={`/transactions/${tt.tx_hash}`} className="flex items-center justify-between gap-3 rounded-[16px] border border-[#ecefe8] bg-white px-4 py-3 text-sm transition hover:border-[#b4cda8]">
+                      <span className="min-w-0">
+                        <span className="font-medium text-[#1c2a1d]">{outbound ? "Sent" : "Received"} {formatBaseUnits(tt.amount)}</span>
+                        <span className="block text-xs text-[#7e887f]">
+                          {tt.token_name || formatAddress(tt.token, 4)} · {outbound ? "to" : "from"} {formatAddress(other, 4)} · block {formatExact(tt.block_number)}
+                        </span>
+                      </span>
+                      <span className="text-xs text-[#7e887f]">{formatRelativeTime(tt.mined_at)}</span>
                     </Link>
                   );
-                })
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
-                  No recent transactions were returned for this address.
-                </div>
-              )}
-            </CardContent>
+                })}
+              </div>
+            ) : (
+              <Empty>No token transfers recorded. They are decoded from receipts once transactions are mined.</Empty>
+            )}
           </Card>
 
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <Network className="size-5" />
-                <CardTitle className="text-[#132118]">Top counterparties</CardTitle>
-              </div>
-              <CardDescription>
-                Highest-activity counterparties.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {topCounterparties.length ? (
-                topCounterparties.map((item) => (
-                  <Link
-                    key={item.address}
-                    href={`/accounts/${encodeURIComponent(item.address)}`}
-                    className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-[#132118]">
-                          {item.entity_name || formatAddress(item.address, 8)}
-                        </div>
-                        <div className="mt-1 font-mono text-xs text-[#607065]">
-                          {item.address}
-                        </div>
-                        <div className="mt-2 text-xs text-[#728076]">
-                          {formatCount(item.total_count)} shared transactions ·{" "}
-                          {formatWeiToEth(item.total_value)}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className={entityTone(item.entity_type)}>
-                          {item.entity_type || (item.is_contract ? "contract" : "wallet")}
-                        </Badge>
-                        <Badge className={riskTone(item.risk_level)}>
-                          {item.risk_level || "observed"}
-                        </Badge>
-                      </div>
-                    </div>
+          <Card
+            icon={<Network className="size-4" />}
+            title="Top counterparties"
+            description={`${Math.min(8, profile.counterparties.length)} of ${formatExact(profile.counterparty_count)} counterparties, by number of transactions.`}
+            engine="postgres"
+          >
+            {profile.counterparties.length ? (
+              <div className="space-y-2">
+                {profile.counterparties.map((item) => (
+                  <Link key={item.address} href={`/accounts/${item.address}`} className="flex items-center justify-between gap-3 rounded-[16px] border border-[#ecefe8] bg-white px-4 py-3 transition hover:border-[#b4cda8]">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-[#1c2a1d]">{item.entity_name || formatAddress(item.address, 8)}</span>
+                      <span className="block text-xs text-[#7e887f]">
+                        {formatExact(item.sent_count)} sent to · {formatExact(item.received_count)} received from · {formatWeiToEth(item.total_value, 3)}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Badge className={entityTone(item.entity_type)}>{item.entity_type}</Badge>
+                      {item.risk_level !== "none" ? <Badge className={riskTone(item.risk_level)}>{item.risk_level}</Badge> : null}
+                    </span>
                   </Link>
-                ))
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
-                  No counterparties were stored for this address yet.
-                </div>
-              )}
-            </CardContent>
+                ))}
+              </div>
+            ) : (
+              <Empty>No counterparties yet.</Empty>
+            )}
+            <QueryDisclosure query={QUERIES.counterparties} />
           </Card>
         </div>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <Brain className="size-5" />
-                <CardTitle className="text-[#132118]">Behavior signature</CardTitle>
+          <Card icon={<Tag className="size-4" />} title="Risk and label" engine="postgres">
+            <div className="rounded-[18px] border border-[#ecefe8] bg-white p-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[#5d6a60]">Combined risk</span>
+                <Badge className={riskTone(profile.risk_level)}>{profile.risk_level}</Badge>
               </div>
-              <CardDescription>
-                Top behavior features and nearest similar accounts.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
-                <div className="text-sm font-semibold text-[#132118]">
-                  Top feature weights
-                </div>
-                <div className="mt-3 space-y-2">
-                  {topFeatures.length ? (
-                    topFeatures.map(([name, value]) => (
-                      <div
-                        key={name}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <span className="text-[#59675d]">
-                          {formatFeatureLabel(name)}
-                        </span>
-                        <span className="font-mono text-[#132118]">
-                          {formatFeatureValue(value)}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-sm text-[#627065]">
-                      No behavior feature vector has been materialized yet.
-                    </div>
-                  )}
-                </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-[#6f7b72]">
+                <span>Label: <b className="text-[#1c2a1d]">{profile.label_risk}</b></span>
+                <span>Flags: <b className="text-[#1c2a1d]">{profile.flag_risk}</b></span>
               </div>
-
-              <div className="space-y-3">
-                {similarMatches.length ? (
-                  similarMatches.map((match) => (
-                    <Link
-                      key={match.address}
-                      href={`/accounts/${encodeURIComponent(match.address)}`}
-                      className="block rounded-[24px] border border-[#dbe3d8] bg-white/82 p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-[#132118]">
-                            {match.entity_name || formatAddress(match.address, 8)}
-                          </div>
-                          <div className="mt-1 text-sm text-[#5d6a60]">
-                            Similarity {formatSimilarity(match.similarity)}
-                          </div>
-                          {match.highlights.length ? (
-                            <div className="mt-2 text-xs text-[#728076]">
-                              {match.highlights.slice(0, 2).join(" · ")}
-                            </div>
-                          ) : null}
-                        </div>
-                        <Badge className={riskTone(match.risk_level)}>
-                          {match.risk_level || "observed"}
-                        </Badge>
-                      </div>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="rounded-[24px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
-                    No similar addresses were returned yet.
-                  </div>
-                )}
-              </div>
-            </CardContent>
+              <p className="mt-2 text-xs leading-5 text-[#6f7b72]">{riskReason} Risk is the worse of the two, from the address_risk view.</p>
+            </div>
+            <div className="mt-4">
+              <LabelForm
+                address={profile.address}
+                isContract={profile.is_contract}
+                initial={{ name: profile.entity_name, entity_type: profile.label_source ? profile.entity_type : "", risk_level: profile.label_risk, source: profile.label_source }}
+              />
+            </div>
+            <QueryDisclosure query={QUERIES.accountProfile} />
           </Card>
 
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex items-center gap-2 text-[#2b6631]">
-                <Waves className="size-5" />
-                <CardTitle className="text-[#132118]">Velocity snapshot</CardTitle>
-              </div>
-              <CardDescription>
-                Rolling 72-hour activity curve.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-[24px] border border-[#dbe3d8] bg-[#f6f9f3] p-4">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.2em] text-[#7b887d]">
-                      Peak hourly count
+          <Card icon={<Brain className="size-4" />} title="Behaviour profile" description="The eleven features stored as this account's vector." engine="pgvector">
+            {behavior ? (
+              <>
+                <dl className="divide-y divide-[#edf0e9] rounded-[18px] border border-[#ecefe8] bg-white text-sm">
+                  {FEATURES.map((feature) => (
+                    <div key={feature.key} className="flex items-center justify-between gap-3 px-4 py-2">
+                      <dt className="text-[#5d6a60]">{feature.label}</dt>
+                      <dd className="font-medium tabular-nums text-[#1c2a1d]">{feature.format(behavior.features[feature.key] ?? 0)}</dd>
                     </div>
-                    <div className="mt-2 text-2xl font-semibold text-[#132118]">
-                      {formatCount(Math.max(...(velocityValues.length ? velocityValues : [0])))}
+                  ))}
+                </dl>
+                <p className="mt-2 text-xs text-[#7e887f]">
+                  From {formatExact(behavior.sample_size)} transactions · rebuilt {formatRelativeTime(behavior.updated_at)}
+                </p>
+              </>
+            ) : (
+              <Empty>
+                {behaviorResult.status === 404
+                  ? "Not computed yet. Behaviour vectors are rebuilt every 30 seconds for recently active addresses."
+                  : behaviorResult.error}
+              </Empty>
+            )}
+          </Card>
+
+          <Card icon={<Brain className="size-4" />} title="Similar accounts" description="Nearest behaviour vectors by cosine similarity (accounts with at least 3 transactions)." engine="pgvector">
+            {similar.length ? (
+              <div className="space-y-2">
+                {similar.map((match) => (
+                  <Link key={match.address} href={`/accounts/${match.address}`} className="block rounded-[16px] border border-[#ecefe8] bg-white px-4 py-3 transition hover:border-[#b4cda8]">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate text-sm font-medium text-[#1c2a1d]">{match.entity_name || formatAddress(match.address, 6)}</span>
+                      <span className="text-sm font-semibold tabular-nums text-[#1c2a1d]">{formatSimilarity(match.similarity)}</span>
                     </div>
-                  </div>
-                  <div className="text-right text-sm text-[#6b786d]">
-                    {velocityValues.length
-                      ? `${velocityValues.length} hourly buckets`
-                      : "No buckets yet"}
-                  </div>
-                </div>
-                <div className="mt-4 h-36">
-                  <LineChart
-                    values={velocityValues}
-                    stroke="rgb(18 148 32)"
-                    fill="rgba(180, 218, 167, 0.34)"
-                  />
-                </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#edf1e8]">
+                      <div className="h-full rounded-full bg-[#8a5a12]" style={{ width: `${Math.round(match.similarity * 100)}%` }} />
+                    </div>
+                    <div className="mt-1.5 text-xs text-[#7e887f]">
+                      {match.highlights.join(" · ")} · {formatExact(match.sample_size)} txs
+                    </div>
+                  </Link>
+                ))}
               </div>
-            </CardContent>
+            ) : (
+              <Empty>{behavior ? "No other accounts with enough history to compare yet." : "Available once this account's behaviour vector is computed."}</Empty>
+            )}
+            <QueryDisclosure query={QUERIES.similarAccounts} />
+          </Card>
+
+          <Card icon={<Waves className="size-4" />} title="Activity, last 72 hours" description="Transactions per hour; dark green is the sent share." engine="postgres">
+            {velocity.length ? (
+              <HourlyBars points={velocity} />
+            ) : (
+              <Empty>
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="size-4" />
+                  {velocityResult.error ?? "No activity data."}
+                </span>
+              </Empty>
+            )}
           </Card>
         </div>
       </section>

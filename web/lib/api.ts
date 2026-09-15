@@ -23,12 +23,26 @@ export function buildBackendHeaders(initial?: HeadersInit) {
   return headers;
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(buildBackendUrl(path), {
-    ...init,
-    cache: "no-store",
-    headers: buildBackendHeaders(init?.headers),
-  });
+export type ApiResult<T> =
+  | { data: T; error: null; status: number }
+  | { data: null; error: string; status: number };
+
+const UNREACHABLE = "The forensic API is unreachable. Check that the Go backend is running.";
+
+/**
+ * Server-side fetch that keeps the failure reason. Pages use it to tell "not found"
+ * apart from "timed out" or "backend down" instead of treating every error as empty.
+ */
+export async function apiResult<T>(path: string): Promise<ApiResult<T>> {
+  let response: Response;
+  try {
+    response = await fetch(buildBackendUrl(path), {
+      cache: "no-store",
+      headers: buildBackendHeaders(),
+    });
+  } catch {
+    return { data: null, error: UNREACHABLE, status: 0 };
+  }
 
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
@@ -38,16 +52,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
         detail = body.error;
       }
     } catch {}
-    throw new Error(detail);
+    return { data: null, error: detail, status: response.status };
   }
 
-  return (await response.json()) as T;
+  return { data: (await response.json()) as T, error: null, status: response.status };
 }
 
+/** Returns the data, or null for any failure. Use only where a failure can be shown as empty. */
 export async function maybeApiFetch<T>(path: string): Promise<T | null> {
-  try {
-    return await apiFetch<T>(path);
-  } catch {
-    return null;
-  }
+  const result = await apiResult<T>(path);
+  return result.data;
 }

@@ -1,864 +1,442 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  BriefcaseBusiness,
-  Download,
-  MoreHorizontal,
-  Network,
-  ShieldAlert,
-} from "lucide-react";
+import { startTransition, useCallback, useEffect, useState } from "react";
+import { AlertTriangle, Blocks, Coins, Download, ShieldAlert, Users } from "lucide-react";
 
 import { useLiveSnapshot } from "@/components/dashboard/live-snapshot-provider";
+import { PipelinePanel } from "@/components/dashboard/pipeline-panel";
+import { QueryDisclosure } from "@/components/dashboard/query-disclosure";
+import { SourceTag, SourceTags } from "@/components/dashboard/source-tag";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { clientApiFetch } from "@/lib/client-api";
-import type {
-  AddressActivity,
-  ForensicFlag,
-  NetworkMetricPoint,
-  OverviewStats,
-  Transaction,
-} from "@/lib/types";
+import { FLAG_ENGINES, FLAG_LABELS } from "@/lib/flags";
+import { QUERIES } from "@/lib/queries";
+import type { AddressActivity, ForensicFlag, NetworkMetricPoint } from "@/lib/types";
 import {
   cn,
   formatAddress,
   formatCount,
   formatDateTime,
-  formatPercent,
+  formatExact,
+  formatRelativeTime,
   formatWeiToEth,
   riskTone,
+  statusTone,
+  txKind,
 } from "@/lib/utils";
 
-const ANALYTICS_REFRESH_MS = 20_000;
-const HISTORY_WINDOWS = [
+const WINDOWS = [
   { label: "24H", hours: 24 },
   { label: "72H", hours: 72 },
-  { label: "1W", hours: 168 },
+  { label: "7D", hours: 168 },
 ] as const;
-const ACTIVITY_WINDOWS = [
-  { label: "1H", hours: 1 },
-  { label: "6H", hours: 6 },
-  { label: "24H", hours: 24 },
-] as const;
+const REFRESH_MS = 30_000;
 
-type OverviewLiveSurfaceProps = {
-  initialOverview: OverviewStats | null;
+type Props = {
   initialTopAddresses: AddressActivity[];
-  initialRecentTransactions: Transaction[];
-  initialRecentFlags: ForensicFlag[];
   initialNetworkMetrics: NetworkMetricPoint[];
+  apiError: string | null;
 };
 
 function sumWei(values: string[]) {
-  return values.reduce((sum, value) => {
-    if (!value || !/^-?\d+$/.test(value)) {
-      return sum;
-    }
-    return sum + BigInt(value);
-  }, BigInt(0));
+  return values.reduce((sum, value) => (/^\d+$/.test(value) ? sum + BigInt(value) : sum), BigInt(0));
 }
 
-function formatWindowLabel(value?: string) {
-  if (!value) {
-    return "--";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "--";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    hour12: false,
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+/** Rounds a raw tick step up to 1, 2 or 5 × 10^k. */
+function niceStep(raw: number) {
+  if (raw <= 1) return 1;
+  const exponent = 10 ** Math.floor(Math.log10(raw));
+  const fraction = raw / exponent;
+  return (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * exponent;
 }
 
-function calculateDelta(current: number, previous: number) {
-  if (!previous) {
-    return current ? 100 : 0;
-  }
-
-  return ((current - previous) / Math.max(previous, 1)) * 100;
+function bucketLabel(iso: string, multiDay: boolean) {
+  return new Intl.DateTimeFormat(
+    "en-US",
+    multiDay
+      ? { month: "short", day: "numeric", hour: "2-digit", hourCycle: "h23", timeZone: "UTC" }
+      : { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" },
+  ).format(new Date(iso));
 }
 
-function buildPoints(values: number[], width: number, height: number, padding: number) {
-  const safe = values.length ? values : [0, 0];
-  const min = Math.min(...safe);
-  const max = Math.max(...safe);
-  const range = max - min || 1;
-
-  return safe.map((value, index) => {
-    const x =
-      safe.length === 1
-        ? width / 2
-        : padding + (index / (safe.length - 1)) * (width - padding * 2);
-    const y =
-      height - padding - ((value - min) / range) * (height - padding * 2);
-    return { x, y, value };
-  });
-}
-
-function compressMetrics(
-  points: NetworkMetricPoint[],
-  targetCount: number,
-): NetworkMetricPoint[] {
-  if (points.length <= targetCount) {
-    return points;
-  }
-
-  const result: NetworkMetricPoint[] = [];
-  for (let index = 0; index < targetCount; index += 1) {
-    const start = Math.floor((index / targetCount) * points.length);
-    const end = Math.floor(((index + 1) / targetCount) * points.length);
-    const slice = points.slice(start, Math.max(start + 1, end));
-    const bucket = slice.at(-1)?.bucket || points[Math.min(points.length - 1, start)]?.bucket;
-    const transactionCount = slice.reduce(
-      (sum, point) => sum + point.transaction_count,
-      0,
-    );
-    const uniqueAddresses = Math.round(
-      slice.reduce((sum, point) => sum + point.unique_addresses, 0) /
-        Math.max(slice.length, 1),
-    );
-    const totalValue = sumWei(slice.map((point) => point.total_value)).toString();
-
-    result.push({
-      bucket: bucket || "",
-      transaction_count: transactionCount,
-      unique_addresses: uniqueAddresses,
-      avg_gas_price: slice.at(-1)?.avg_gas_price || "0",
-      total_value: totalValue,
-    });
-  }
-
-  return result;
-}
-
-function OverviewTrendChart({
-  primary,
-  secondary,
-  labels,
-  height = 360,
-}: {
-  primary: number[];
-  secondary: number[];
-  labels: string[];
-  height?: number;
-}) {
+function HistoryChart({ points, hours }: { points: NetworkMetricPoint[]; hours: number }) {
   const width = 760;
-  const padding = 22;
-  const safePrimary = primary.length ? primary : [0, 0, 0, 0];
-  const safeSecondary =
-    secondary.length === safePrimary.length
-      ? secondary
-      : new Array(safePrimary.length).fill(0);
-  const primaryPoints = buildPoints(safePrimary, width, height, padding);
-  const secondaryPoints = buildPoints(safeSecondary, width, height, padding);
-  const [selectedIndex, setSelectedIndex] = useState(
-    Math.max(0, safePrimary.length - 1),
-  );
-  const clampedSelectedIndex = Math.min(selectedIndex, safePrimary.length - 1);
-  const selectedPrimary = primaryPoints[clampedSelectedIndex];
-  const selectedSecondary = secondaryPoints[clampedSelectedIndex];
-  const tooltipWidth = 188;
-  const tooltipLeft = Math.min(
-    Math.max(selectedPrimary.x - tooltipWidth / 2, 12),
-    width - tooltipWidth - 12,
-  );
-  const area = [
-    `${padding},${height - padding}`,
-    ...primaryPoints.map((point) => `${point.x},${point.y}`),
-    `${width - padding},${height - padding}`,
-  ].join(" ");
-  const maxValue = Math.max(...safePrimary, ...safeSecondary, 1);
-  const yLabels = [1, 0.75, 0.5, 0.25, 0].map((ratio) =>
-    formatCount(Math.round(maxValue * ratio)),
-  );
+  const height = 300;
+  const padL = 52;
+  const padR = 18;
+  const padT = 16;
+  const padB = 34;
+  const [hover, setHover] = useState<number | null>(null);
+
+  const n = points.length;
+  if (!n) {
+    return (
+      <div className="flex h-[260px] items-center justify-center rounded-[22px] border border-dashed border-[#dbe3d8] text-sm text-[#627065]">
+        No hourly history yet. The rollup refreshes every 30 seconds.
+      </div>
+    );
+  }
+
+  const peak = Math.max(0, ...points.map((p) => Math.max(p.transaction_count, p.unique_addresses)));
+  const step = niceStep(peak / 4);
+  const yMax = step * 4;
+  const x = (i: number) => (n === 1 ? padL + (width - padL - padR) / 2 : padL + (i / (n - 1)) * (width - padL - padR));
+  const y = (v: number) => padT + (1 - v / yMax) * (height - padT - padB);
+  const txLine = points.map((p, i) => `${x(i)},${y(p.transaction_count)}`).join(" ");
+  const addressLine = points.map((p, i) => `${x(i)},${y(p.unique_addresses)}`).join(" ");
+  const multiDay = hours > 24;
+  const labelEvery = Math.max(1, Math.ceil(n / 6));
+  const active = hover ?? n - 1;
+  const point = points[active];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[38px_minmax(0,1fr)]">
-      <div
-        className="flex flex-col justify-between pt-1 text-[11px] text-[#abb2a9]"
-        style={{ height }}
+    <div className="relative">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-auto w-full"
+        role="img"
+        aria-label={`Transactions and unique addresses per hour over the last ${hours} hours`}
+        onMouseLeave={() => setHover(null)}
+        onMouseMove={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const svgX = ((event.clientX - rect.left) / rect.width) * width;
+          const ratio = (svgX - padL) / (width - padL - padR);
+          setHover(Math.min(n - 1, Math.max(0, Math.round(ratio * (n - 1)))));
+        }}
       >
-        {yLabels.map((label) => (
-          <span key={label}>{label}</span>
+        {[0, 1, 2, 3, 4].map((tick) => (
+          <g key={tick}>
+            <line x1={padL} x2={width - padR} y1={y(step * tick)} y2={y(step * tick)} stroke="#e3e8df" strokeDasharray={tick === 0 ? undefined : "3 5"} />
+            <text x={padL - 10} y={y(step * tick) + 4} textAnchor="end" fontSize="11" fill="#8a948b">
+              {formatCount(step * tick)}
+            </text>
+          </g>
         ))}
-      </div>
-
-      <div>
-        <div
-          className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,rgba(251,252,249,0.7),rgba(246,248,242,0.9))]"
-          style={{ height }}
-        >
-        <div
-          className="pointer-events-none absolute z-10 rounded-[18px] border border-[#e8ede5] bg-white px-3 py-2 shadow-[0_16px_35px_rgba(25,40,26,0.09)]"
-          style={{
-            left: `${(tooltipLeft / width) * 100}%`,
-            top: `${Math.max(14, selectedPrimary.y - 76)}px`,
-          }}
-        >
-          <div className="text-[11px] font-medium text-[#7b887d]">
-            {labels[clampedSelectedIndex] || "Current window"}
-          </div>
-            <div className="mt-2 space-y-1 text-xs">
-              <div className="flex items-center justify-between gap-6">
-                <span className="flex items-center gap-2 text-[#556357]">
-                  <span className="size-2 rounded-full bg-[#26b54a]" />
-                  Transactions
-                </span>
-                <span className="font-semibold text-[#132118]">
-                  {formatCount(selectedPrimary.value)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-6">
-                <span className="flex items-center gap-2 text-[#556357]">
-                  <span className="size-2 rounded-full bg-[#ef5c43]" />
-                  Addresses
-                </span>
-                <span className="font-semibold text-[#132118]">
-                  {formatCount(selectedSecondary.value)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <svg
-            viewBox={`0 0 ${width} ${height}`}
-            className="h-full w-full"
-            preserveAspectRatio="none"
-            aria-label="Transactions and unique addresses over time"
-            onMouseLeave={() => setSelectedIndex(Math.max(0, safePrimary.length - 1))}
-            onMouseMove={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              if (!rect.width) {
-                return;
-              }
-              const ratio = (event.clientX - rect.left) / rect.width;
-              const nextIndex = Math.round(
-                Math.min(Math.max(ratio, 0), 1) * (safePrimary.length - 1),
-              );
-              setSelectedIndex(nextIndex);
-            }}
-          >
-            <defs>
-              <linearGradient id="overview-primary-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="rgba(38, 181, 74, 0.22)" />
-                <stop offset="100%" stopColor="rgba(38, 181, 74, 0.02)" />
-              </linearGradient>
-            </defs>
-
-            {[0.2, 0.4, 0.6, 0.8].map((ratio) => (
-              <line
-                key={ratio}
-                x1={padding}
-                x2={width - padding}
-                y1={padding + ratio * (height - padding * 2)}
-                y2={padding + ratio * (height - padding * 2)}
-                stroke="rgba(162, 171, 159, 0.18)"
-                strokeDasharray="4 7"
-              />
-            ))}
-
-            <polygon points={area} fill="url(#overview-primary-fill)" />
-
-            <polyline
-              points={primaryPoints.map((point) => `${point.x},${point.y}`).join(" ")}
-              fill="none"
-              stroke="#25b74b"
-              strokeWidth="3.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <polyline
-              points={secondaryPoints.map((point) => `${point.x},${point.y}`).join(" ")}
-              fill="none"
-              stroke="#ef5c43"
-              strokeWidth="2.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-
-            <line
-              x1={selectedPrimary.x}
-              x2={selectedPrimary.x}
-              y1={padding}
-              y2={height - padding}
-              stroke="#b6bdb3"
-              strokeDasharray="5 7"
-            />
-
-            <circle cx={selectedPrimary.x} cy={selectedPrimary.y} r="5.5" fill="#ffffff" stroke="#25b74b" strokeWidth="2.5" />
-            <circle cx={selectedSecondary.x} cy={selectedSecondary.y} r="5.5" fill="#ffffff" stroke="#ef5c43" strokeWidth="2.5" />
-          </svg>
-        </div>
-
-        <div className="mt-4 grid grid-cols-6 gap-2 text-center text-[11px] text-[#98a198] sm:grid-cols-8">
-          {labels.map((label, index) => (
-            <span key={`${label}:${index}`}>{label}</span>
-          ))}
-        </div>
+        {points.map((p, i) =>
+          (i % labelEvery === 0 && n - 1 - i >= labelEvery / 2) || i === n - 1 ? (
+            <text key={p.bucket} x={x(i)} y={height - 10} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize="11" fill="#8a948b">
+              {bucketLabel(p.bucket, multiDay)}
+            </text>
+          ) : null,
+        )}
+        <polygon points={`${x(0)},${y(0)} ${txLine} ${x(n - 1)},${y(0)}`} fill="rgba(37,183,75,0.12)" />
+        <polyline points={txLine} fill="none" stroke="#25a346" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={addressLine} fill="none" stroke="#2c5d88" strokeWidth="2" strokeDasharray="6 4" strokeLinejoin="round" />
+        <line x1={x(active)} x2={x(active)} y1={padT} y2={height - padB} stroke="#b6bdb3" strokeDasharray="4 4" />
+        <circle cx={x(active)} cy={y(point.transaction_count)} r="4.5" fill="#fff" stroke="#25a346" strokeWidth="2.5" />
+        <circle cx={x(active)} cy={y(point.unique_addresses)} r="4" fill="#fff" stroke="#2c5d88" strokeWidth="2" />
+      </svg>
+      <div
+        className="pointer-events-none absolute top-1 w-[184px] rounded-xl border border-[#e3e8e0] bg-white/95 px-3 py-2 text-xs shadow-[0_10px_28px_rgba(25,40,26,0.1)]"
+        style={{ left: `clamp(0px, calc(${(x(active) / width) * 100}% - 92px), calc(100% - 184px))` }}
+      >
+        <div className="font-medium text-[#56645a]">{bucketLabel(point.bucket, true)} UTC</div>
+        <div className="mt-1.5 flex justify-between"><span className="text-[#25a346]">Transactions</span><b className="tabular-nums">{formatExact(point.transaction_count)}</b></div>
+        <div className="flex justify-between"><span className="text-[#2c5d88]">Unique addresses</span><b className="tabular-nums">{formatExact(point.unique_addresses)}</b></div>
+        <div className="flex justify-between"><span className="text-[#6b776d]">Value</span><b className="tabular-nums">{formatWeiToEth(point.total_value, 2)}</b></div>
       </div>
     </div>
   );
 }
 
-function MetricPanel({
-  title,
-  value,
-  change,
-  detail,
+function Kpi({
   icon,
-  href,
+  label,
+  value,
+  detail,
 }: {
-  title: string;
-  value: string;
-  change: number;
-  detail: string;
   icon: React.ReactNode;
-  href?: string;
+  label: string;
+  value: string;
+  detail: string;
 }) {
-  const positive = change >= 0;
-
   return (
     <div className="rounded-[24px] border border-[#e8ebe4] bg-[#fdfefb] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium text-[#263328]">
-          <span className="flex size-6 items-center justify-center rounded-full bg-[#f0f5eb] text-[#2b6631]">
-            {icon}
-          </span>
-          {title}
+          <span className="flex size-6 items-center justify-center rounded-full bg-[#f0f5eb] text-[#2b6631]">{icon}</span>
+          {label}
         </div>
-        {href ? (
-          <Link
-            href={href}
-            className="text-xs font-medium text-[#869188] transition hover:text-[#2b6631]"
-          >
-            View more
-          </Link>
-        ) : null}
+        <SourceTag engine="postgres" />
       </div>
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <div className="text-[2rem] font-semibold leading-none tracking-tight text-[#152319]">
-          {value}
-        </div>
-        <div
-          className={cn(
-            "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
-            positive
-              ? "bg-[#e8f6ea] text-[#239140]"
-              : "bg-[#f9e3df] text-[#c45543]",
-          )}
-        >
-          {positive ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
-          {formatPercent(Math.abs(change))}
-        </div>
-      </div>
-      <div className="mt-2 text-sm text-[#8a948b]">{detail}</div>
+      <div className="mt-4 text-[2rem] font-semibold leading-none tracking-tight tabular-nums text-[#152319]">{value}</div>
+      <div className="mt-2 text-sm text-[#7b867c]">{detail}</div>
     </div>
   );
 }
 
-export function OverviewLiveSurface({
-  initialOverview,
-  initialTopAddresses,
-  initialRecentTransactions,
-  initialRecentFlags,
-  initialNetworkMetrics,
-}: OverviewLiveSurfaceProps) {
+export function FlagListItem({ flag }: { flag: ForensicFlag }) {
+  return (
+    <Link
+      href={flag.tx_hash ? `/transactions/${flag.tx_hash}` : `/accounts/${flag.address}`}
+      className="block rounded-[20px] border border-[#ecefe8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-[#172318]">{FLAG_LABELS[flag.flag_type] ?? flag.flag_type.replace(/_/g, " ")}</div>
+          <div className="mt-1 text-sm leading-5 text-[#5f6b61] [overflow-wrap:anywhere]">{flag.description}</div>
+        </div>
+        <Badge className={riskTone(flag.severity)}>{flag.severity}</Badge>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#7e887f]">
+        <span>{formatRelativeTime(flag.detected_at)}</span>
+        <SourceTags engines={FLAG_ENGINES[flag.flag_type] ?? ["postgres"]} />
+      </div>
+    </Link>
+  );
+}
+
+export function OverviewLiveSurface({ initialTopAddresses, initialNetworkMetrics, apiError }: Props) {
   const { snapshot } = useLiveSnapshot();
-  const [overview, setOverview] = useState(initialOverview);
+  const [hours, setHours] = useState<number>(24);
+  const [network, setNetwork] = useState(initialNetworkMetrics);
   const [topAddresses, setTopAddresses] = useState(initialTopAddresses);
-  const [recentTransactions, setRecentTransactions] = useState(initialRecentTransactions);
-  const [recentFlags, setRecentFlags] = useState(initialRecentFlags);
-  const [networkMetrics, setNetworkMetrics] = useState(initialNetworkMetrics);
-  const [historyWindowHours, setHistoryWindowHours] = useState<number>(24);
-  const [activityWindowHours, setActivityWindowHours] = useState<number>(24);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!snapshot) {
-      return;
-    }
-
-    startTransition(() => {
-      if (snapshot.overview) {
-        setOverview(snapshot.overview);
-      }
-      if (Array.isArray(snapshot.recent_transactions)) {
-        setRecentTransactions(snapshot.recent_transactions);
-      }
-      if (Array.isArray(snapshot.recent_flags)) {
-        setRecentFlags(snapshot.recent_flags);
-      }
-    });
-  }, [snapshot]);
-
-  const refreshAnalytics = useCallback(async (hours = historyWindowHours) => {
+  const refresh = useCallback(async (windowHours: number) => {
     try {
-      const [nextTopAddresses, nextNetworkMetrics] = await Promise.all([
+      const [points, top] = await Promise.all([
+        clientApiFetch<NetworkMetricPoint[]>(`/stats/network?hours=${windowHours}`),
         clientApiFetch<AddressActivity[]>("/addresses/top?limit=6"),
-        clientApiFetch<NetworkMetricPoint[]>(
-          `/stats/network?hours=${hours}&bucket=hour`,
-        ),
       ]);
-
       startTransition(() => {
-        setTopAddresses(nextTopAddresses);
-        setNetworkMetrics(nextNetworkMetrics);
+        setNetwork(points);
+        setTopAddresses(top);
+        setRefreshError(null);
       });
-    } catch {}
-  }, [historyWindowHours]);
-
-  useEffect(() => {
-    void refreshAnalytics(historyWindowHours);
-  }, [historyWindowHours, refreshAnalytics]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      void refreshAnalytics(historyWindowHours);
-    }, ANALYTICS_REFRESH_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [historyWindowHours, refreshAnalytics]);
-
-  const highSeverityCount = recentFlags.filter((flag) => flag.severity === "high").length;
-  const totalNetworkValue = useMemo(
-    () => sumWei(networkMetrics.map((point) => point.total_value)).toString(),
-    [networkMetrics],
-  );
-  const splitIndex = Math.max(1, Math.floor(networkMetrics.length / 2));
-  const previousWindowValue = sumWei(
-    networkMetrics.slice(0, splitIndex).map((point) => point.total_value),
-  );
-  const currentWindowValue = sumWei(
-    networkMetrics.slice(splitIndex).map((point) => point.total_value),
-  );
-  const valueChange =
-    previousWindowValue === BigInt(0)
-      ? currentWindowValue > BigInt(0)
-        ? 100
-        : 0
-      : Number(currentWindowValue - previousWindowValue) /
-        Number(previousWindowValue) *
-        100;
-
-  const latestMetric = networkMetrics.at(-1);
-  const previousMetric = networkMetrics.at(-2);
-  const transactionDelta = calculateDelta(
-    latestMetric?.transaction_count || 0,
-    previousMetric?.transaction_count || 0,
-  );
-  const addressDelta = calculateDelta(
-    latestMetric?.unique_addresses || 0,
-    previousMetric?.unique_addresses || 0,
-  );
-  const signalDelta = calculateDelta(
-    highSeverityCount,
-    Math.max(recentFlags.length - highSeverityCount, 0),
-  );
-
-  const chartWindow = compressMetrics(networkMetrics, 8);
-  const chartPrimary = chartWindow.map((point) => point.transaction_count);
-  const chartSecondary = chartWindow.map((point) => point.unique_addresses);
-  const chartLabels = chartWindow.map((point) =>
-    new Intl.DateTimeFormat("en-US", {
-      hour: "numeric",
-      hour12: false,
-      timeZone: "UTC",
-    }).format(new Date(point.bucket)),
-  );
-
-  const firstBucket = networkMetrics[0]?.bucket;
-  const lastBucket = networkMetrics.at(-1)?.bucket;
-  const relatedFlagByHash = new Map(
-    recentFlags
-      .filter((flag) => flag.tx_hash)
-      .map((flag) => [flag.tx_hash, flag] as const),
-  );
-  const topAddress = topAddresses[0];
-  const visibleRecentTransactions = recentTransactions.filter((tx) => {
-    const timestamp = new Date(tx.timestamp).getTime();
-    if (Number.isNaN(timestamp)) {
-      return false;
+    } catch (error) {
+      setRefreshError(error instanceof Error ? error.message : "Refreshing history failed.");
     }
-    return Date.now() - timestamp <= activityWindowHours * 60 * 60 * 1000;
-  });
+  }, []);
 
-  function exportHistoryCsv() {
-    const header = "bucket,transaction_count,unique_addresses,total_value\n";
-    const rows = networkMetrics
-      .map(
-        (point) =>
-          `${point.bucket},${point.transaction_count},${point.unique_addresses},${point.total_value}`,
-      )
-      .join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
+  useEffect(() => {
+    void refresh(hours);
+    const timer = window.setInterval(() => void refresh(hours), REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [hours, refresh]);
+
+  const overview = snapshot?.overview;
+  const recentTransactions = snapshot?.recent_transactions ?? [];
+  const recentFlags = snapshot?.recent_flags ?? [];
+  const windowTransactions = network.reduce((sum, p) => sum + p.transaction_count, 0);
+  const windowValue = sumWei(network.map((p) => p.total_value)).toString();
+
+  function exportCsv() {
+    const header = "bucket_utc,transaction_count,unique_addresses,avg_gas_price_wei,total_value_wei\n";
+    const rows = network.map((p) => `${p.bucket},${p.transaction_count},${p.unique_addresses},${p.avg_gas_price},${p.total_value}`).join("\n");
+    const url = URL.createObjectURL(new Blob([header + rows], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `forensic-network-history-${historyWindowHours}h.csv`;
-    document.body.append(anchor);
+    anchor.download = `network-history-${hours}h.csv`;
     anchor.click();
-    anchor.remove();
-    window.URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url);
   }
 
   return (
     <div className="space-y-5 pb-4 lg:space-y-6">
-      <section className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-[1.55rem] font-semibold tracking-tight text-[#162317] lg:text-[1.8rem]">
-            Welcome Back, Investigator
-          </h1>
-          <p className="mt-1 text-sm text-[#8a948b]">
-            A concise view of network movement, risk signals, and the most useful places to start.
+          <h1 className="text-[1.6rem] font-semibold tracking-tight text-[#162317] lg:text-[1.85rem]">Overview</h1>
+          <p className="mt-1 max-w-3xl text-sm text-[#7b867c]">
+            Transactions observed by the connected Ethereum node
+            {overview?.first_transaction_at ? ` since ${formatDateTime(overview.first_transaction_at)}` : ""}: pending
+            transactions from its mempool, and every transaction in each new block. This is not the whole chain history.
           </p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="rounded-xl border border-[#e7eae3] bg-[#f7f8f4] px-3 py-2 text-xs font-medium text-[#4f5c51]">
-            Last {historyWindowHours} Hours
-          </div>
-          <div className="rounded-xl border border-[#e7eae3] bg-[#fbfcf8] px-3 py-2 text-xs font-medium text-[#4f5c51]">
-            {formatWindowLabel(firstBucket)} - {formatWindowLabel(lastBucket)}
-          </div>
-          <button
-            type="button"
-            onClick={exportHistoryCsv}
-            className="inline-flex items-center gap-1 rounded-xl border border-[#e7eae3] bg-[#fbfcf8] px-3 py-2 text-xs font-medium text-[#4f5c51] transition hover:bg-white"
-          >
-            <Download className="size-3.5" />
-            Export
-          </button>
-        </div>
       </section>
 
-      <section className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(135deg,#2a5f2d_0%,#244f27_100%)] px-5 py-5 text-white shadow-[0_18px_42px_rgba(31,77,35,0.25)] sm:px-6 sm:py-6">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute -right-8 top-4 h-36 w-36 rounded-[32px] bg-[#7db676]/20 rotate-12" />
-          <div className="absolute right-24 top-8 h-20 w-20 rounded-[22px] bg-[#7db676]/18 rotate-12" />
-          <div className="absolute right-44 bottom-3 h-24 w-24 rounded-[28px] bg-[#7db676]/16 rotate-12" />
-          <div className="absolute right-6 bottom-5 h-28 w-28 rounded-[30px] bg-[#7db676]/14 rotate-12" />
+      {apiError && !snapshot ? (
+        <div role="alert" className="flex items-start gap-3 rounded-[20px] border border-[#ecc5c0] bg-[#fcefed] px-4 py-3 text-sm text-[#7f2f27]">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>{apiError}</span>
         </div>
+      ) : null}
 
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-white/78">Network Snapshot</div>
-            <div className="mt-3 text-[2rem] font-semibold tracking-tight sm:text-[2.35rem]">
-              {formatWeiToEth(totalNetworkValue)}
-            </div>
-            <div className="mt-2 text-sm text-white/72">
-              Value moved across the currently indexed Ethereum activity window.
-            </div>
-            <div className="mt-3 text-sm text-white/78">
-              Signal volume changed{" "}
-              <span className="font-semibold text-[#7fff9b]">
-                {valueChange >= 0 ? "+" : ""}
-                {formatPercent(valueChange)}
-              </span>{" "}
-              versus the previous half-window.
-            </div>
-          </div>
-
-          <div className="relative z-10 flex flex-wrap items-center gap-2">
-            <Button asChild size="sm" className="h-9 rounded-xl bg-[#2fe05b] px-4 text-[#0f2e14] hover:bg-[#3ae466]">
-              <Link href="/graph">Graph</Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              variant="secondary"
-              className="h-9 rounded-xl border-0 bg-white/12 px-4 text-white hover:bg-white/18"
-            >
-              <Link href="/contracts">Contracts</Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              variant="secondary"
-              className="h-9 rounded-xl border-0 bg-white/12 px-4 text-white hover:bg-white/18"
-            >
-              <Link href="/overview">Activity</Link>
-            </Button>
-            <Button
-              asChild
-              size="icon"
-              variant="secondary"
-              className="size-9 rounded-xl border-0 bg-white/12 text-white hover:bg-white/18"
-            >
-              <Link href="/contracts" aria-label="Open contracts">
-                <MoreHorizontal className="size-4" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-3">
-        <MetricPanel
-          title="Network Transactions"
-          value={formatCount(overview?.transaction_count || 0)}
-          change={transactionDelta}
-          detail={`vs ${formatCount(previousMetric?.transaction_count || 0)} in the prior hour`}
-          icon={<Network className="size-3.5" />}
-          href="/graph"
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi
+          icon={<Blocks className="size-3.5" />}
+          label="Transactions"
+          value={overview ? formatExact(overview.transaction_count) : "…"}
+          detail={overview ? `${formatExact(overview.pending_count)} pending · ${formatExact(overview.block_count)} blocks ingested` : "Waiting for live data"}
         />
-        <MetricPanel
-          title="Tracked Addresses"
-          value={formatCount(latestMetric?.unique_addresses || overview?.account_count || 0)}
-          change={addressDelta}
-          detail={`${formatCount(overview?.contract_count || 0)} contracts already modeled`}
-          icon={<BriefcaseBusiness className="size-3.5" />}
-          href="/graph"
+        <Kpi
+          icon={<Users className="size-3.5" />}
+          label="Addresses"
+          value={overview ? formatExact(overview.account_count) : "…"}
+          detail={overview ? `${formatExact(overview.contract_count)} identified as contracts` : "Waiting for live data"}
         />
-        <MetricPanel
-          title="Forensic Flags"
-          value={formatCount(overview?.flag_count || 0)}
-          change={signalDelta}
-          detail={`${formatCount(highSeverityCount)} recent high severity flags in scope`}
+        <Kpi
+          icon={<Coins className="size-3.5" />}
+          label="Token transfers"
+          value={overview ? formatExact(overview.token_transfer_count) : "…"}
+          detail="ERC-20 Transfer events decoded from receipts"
+        />
+        <Kpi
           icon={<ShieldAlert className="size-3.5" />}
+          label="Forensic flags"
+          value={overview ? formatExact(overview.flag_count) : "…"}
+          detail={overview ? `${formatExact(overview.high_flag_count_24h)} high severity in the last 24 h` : "Waiting for live data"}
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.62fr)_minmax(300px,0.86fr)] xl:items-stretch">
-        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)] xl:flex xl:h-full xl:flex-col">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.62fr)_minmax(320px,0.9fr)]">
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="text-base font-semibold text-[#1a271c]">Transaction History</div>
-              <div className="mt-1 text-sm text-[#8a948b]">
-                Indexed transaction throughput compared with unique active addresses.
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-[#1a271c]">Hourly activity</h2>
+                <SourceTag engine="postgres" />
+              </div>
+              <p className="mt-1 text-sm text-[#7b867c]">
+                {formatExact(windowTransactions)} transactions and {formatWeiToEth(windowValue, 2)} observed in this window (UTC hours).
+              </p>
+              <div className="mt-2 flex items-center gap-4 text-xs text-[#5d6a60]">
+                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-[#25a346]" />transactions</span>
+                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 border-t-2 border-dashed border-[#2c5d88]" />unique addresses</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 rounded-xl border border-[#ecefe8] bg-[#f8f9f5] p-1 text-[11px] font-medium text-[#627165]">
-              {HISTORY_WINDOWS.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => setHistoryWindowHours(item.hours)}
-                  className={cn(
-                    "rounded-lg px-2.5 py-1.5 transition",
-                    historyWindowHours === item.hours
-                      ? "bg-white text-[#1f2c20] shadow-sm"
-                      : "hover:bg-white/70",
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))}
-              <span className="ml-1 rounded-lg px-2.5 py-1.5 text-[#8a948b]">
-                Hover to inspect
-              </span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-xl border border-[#ecefe8] bg-[#f8f9f5] p-1 text-[11px] font-medium text-[#627165]" role="group" aria-label="Time window">
+                {WINDOWS.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    aria-pressed={hours === item.hours}
+                    onClick={() => setHours(item.hours)}
+                    className={cn("rounded-lg px-2.5 py-1.5 transition", hours === item.hours ? "bg-white text-[#1f2c20] shadow-sm" : "hover:bg-white/70")}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={exportCsv}
+                className="inline-flex items-center gap-1 rounded-xl border border-[#e7eae3] bg-[#fbfcf8] px-3 py-2 text-xs font-medium text-[#4f5c51] transition hover:bg-white"
+              >
+                <Download className="size-3.5" />
+                CSV
+              </button>
             </div>
           </div>
-
-          <div className="mt-5 xl:flex-1">
-            <OverviewTrendChart
-              primary={chartPrimary}
-              secondary={chartSecondary}
-              labels={chartLabels}
-              height={500}
-            />
+          {refreshError ? <p className="mt-2 text-xs text-[#933f34]">Could not refresh: {refreshError}</p> : null}
+          <div className="mt-4">
+            <HistoryChart points={network} hours={hours} />
           </div>
+          <QueryDisclosure query={QUERIES.networkHistory} />
         </div>
 
-        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)] xl:h-full">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-base font-semibold text-[#1a271c]">Recent Forensic Flags</div>
-              <div className="mt-1 text-sm text-[#8a948b]">
-                The newest backend signals attached to the current dataset.
-              </div>
-            </div>
-            <Link
-              href="/contracts"
-              className="text-xs font-medium text-[#869188] transition hover:text-[#2b6631]"
-            >
-              Contracts
-            </Link>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {recentFlags.slice(0, 4).length ? (
-              recentFlags.slice(0, 4).map((flag) => (
-                <Link
-                  key={flag.id}
-                  href={
-                    flag.tx_hash
-                      ? `/transactions/${encodeURIComponent(flag.tx_hash)}`
-                      : `/accounts/${encodeURIComponent(flag.address)}`
-                  }
-                  className="block rounded-[22px] border border-[#ecefe8] bg-white p-4 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-[#172318]">
-                        {flag.flag_type.replace(/_/g, " ")}
-                      </div>
-                      <div className="mt-1 text-sm text-[#667267]">
-                        {flag.description}
-                      </div>
-                    </div>
-                    <Badge className={riskTone(flag.severity)}>
-                      {flag.severity}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 text-xs text-[#7e887f]">
-                    {formatAddress(flag.address, 7)} · {formatDateTime(flag.detected_at)}
-                  </div>
-                </Link>
-              ))
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+          <h2 className="text-base font-semibold text-[#1a271c]">Recent forensic flags</h2>
+          <p className="mt-1 text-sm text-[#7b867c]">Raised by the detectors while enriching transactions.</p>
+          <div className="mt-4 space-y-3">
+            {recentFlags.slice(0, 5).length ? (
+              recentFlags.slice(0, 5).map((flag) => <FlagListItem key={flag.id} flag={flag} />)
             ) : (
-              <div className="rounded-[22px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
-                No forensic flags are available yet.
+              <div className="rounded-[20px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm leading-6 text-[#627065]">
+                No flags yet. Flags appear when value returns to its origin through a loop (Neo4j), or when a
+                contract clones one labelled as risky (pgvector).
               </div>
             )}
           </div>
-
-          <div className="mt-6 rounded-[22px] border border-[#ecefe8] bg-[#f6f7f3] p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#95a094]">
-              Priority address
-            </div>
-            <div className="mt-2 text-sm font-medium text-[#1c2a1d]">
-              {topAddress
-                ? `${formatAddress(topAddress.address, 8)} is currently the most active tracked address.`
-                : "No address activity has been indexed yet."}
-            </div>
-            <div className="mt-2 text-sm text-[#7e887f]">
-              {topAddress
-                ? `${formatCount(topAddress.total_count)} transfers observed · last seen ${formatDateTime(topAddress.last_seen)}`
-                : "No address activity has been indexed yet."}
-            </div>
-          </div>
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="text-base font-semibold text-[#1a271c]">Recent Transactions</div>
-            <div className="mt-1 text-sm text-[#8a948b]">
-              Latest ledger events in the selected window.
-            </div>
-          </div>
-          <div className="flex items-center gap-1 rounded-xl border border-[#ecefe8] bg-[#f8f9f5] p-1 text-[11px] font-medium text-[#627165]">
-            {ACTIVITY_WINDOWS.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => setActivityWindowHours(item.hours)}
-                className={cn(
-                  "rounded-lg px-2.5 py-1.5 transition",
-                  activityWindowHours === item.hours
-                    ? "bg-white text-[#1f2c20] shadow-sm"
-                    : "hover:bg-white/70",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-            <span className="ml-1 rounded-lg px-2.5 py-1.5 text-[#8a948b]">
-              {visibleRecentTransactions.length} rows
-            </span>
-          </div>
-        </div>
+      <PipelinePanel />
 
-        <div className="mt-5 overflow-hidden rounded-[22px] border border-[#ecefe8]">
-          <div className="overflow-x-auto">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.62fr)_minmax(320px,0.9fr)]">
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-[#1a271c]">Latest transactions</h2>
+              <p className="mt-1 text-sm text-[#7b867c]">The 12 most recently observed, updated every 2 seconds.</p>
+            </div>
+            <SourceTag engine="postgres" />
+          </div>
+          <div className="mt-4 overflow-x-auto rounded-[20px] border border-[#ecefe8]">
             <table className="min-w-full border-collapse text-sm">
-              <thead className="bg-[#f3f5f1] text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-[#909b91]">
+              <thead className="bg-[#f3f5f1] text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-[#909b91]">
                 <tr>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Route</th>
+                  <th className="px-4 py-3">Transaction</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Entity</th>
-                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3 text-right">Value</th>
+                  <th className="px-4 py-3">From → To</th>
+                  <th className="px-4 py-3">Seen</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleRecentTransactions.length ? (
-                  visibleRecentTransactions.map((tx) => {
-                    const relatedFlag = relatedFlagByHash.get(tx.hash);
-                    const typeLabel = tx.to ? "Transfer" : "Deploy";
-                    const statusLabel = relatedFlag
-                      ? relatedFlag.severity === "high"
-                        ? "Critical"
-                        : "Flagged"
-                      : "Observed";
-
-                    return (
-                      <tr
-                        key={tx.hash}
-                        className="border-t border-[#edf0e9] bg-white transition hover:bg-[#f8faf5]"
-                      >
-                        <td className="px-4 py-4">
-                          <Link
-                            href={`/transactions/${encodeURIComponent(tx.hash)}`}
-                            className="flex min-w-[140px] items-center gap-3"
-                          >
-                            <span
-                              className={cn(
-                                "flex size-5 items-center justify-center rounded-full text-[10px] font-semibold text-white",
-                                tx.to ? "bg-[#2f5f33]" : "bg-[#ef5c43]",
-                              )}
-                            >
-                              {tx.to ? "T" : "D"}
-                            </span>
-                            <span>
-                              <span className="block font-medium text-[#1d2b1e]">
-                                {typeLabel}
-                              </span>
-                              <span className="block font-mono text-[11px] text-[#8a948b]">
-                                {formatAddress(tx.hash, 6)}
-                              </span>
-                            </span>
-                          </Link>
-                        </td>
-                        <td className="px-4 py-4 font-medium text-[#1d2b1e]">
-                          {formatWeiToEth(tx.value)}
-                        </td>
-                        <td className="px-4 py-4 text-[#5b685d]">
-                          {formatAddress(tx.from, 5)} →{" "}
-                          {formatAddress(tx.to || "contract creation", 5)}
-                        </td>
-                        <td className="px-4 py-4">
-                          <Badge
-                            className={relatedFlag ? riskTone(relatedFlag.severity) : undefined}
-                            variant={relatedFlag ? "outline" : "success"}
-                          >
-                            {statusLabel}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-4 text-[#5b685d]">
-                          {relatedFlag
-                            ? formatAddress(relatedFlag.address, 6)
-                            : formatAddress(tx.to || tx.from, 6)}
-                        </td>
-                        <td className="px-4 py-4 text-[#5b685d]">
-                          {formatDateTime(tx.timestamp)}
-                        </td>
-                      </tr>
-                    );
-                  })
+                {recentTransactions.length ? (
+                  recentTransactions.map((tx) => (
+                    <tr key={tx.hash} className="border-t border-[#edf0e9] bg-white">
+                      <td className="px-4 py-3">
+                        <Link href={`/transactions/${tx.hash}`} className="font-mono text-xs text-[#1d2b1e] underline-offset-2 hover:underline">
+                          {formatAddress(tx.hash, 6)}
+                        </Link>
+                        <div className="text-[11px] text-[#8a948b]">{txKind(tx)}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge className={statusTone(tx.status)}>{tx.status}</Badge>
+                        {tx.block_number ? <div className="mt-1 text-[11px] text-[#8a948b]">block {formatExact(tx.block_number)}</div> : null}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-[#1d2b1e]">{formatWeiToEth(tx.value, 3)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-[#5b685d]">
+                        <Link href={`/accounts/${tx.from}`} className="hover:underline">{formatAddress(tx.from, 4)}</Link>
+                        {" → "}
+                        {tx.to ? (
+                          <Link href={`/accounts/${tx.to}`} className="hover:underline">{formatAddress(tx.to, 4)}</Link>
+                        ) : (
+                          <span className="font-sans">new contract</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-[#5b685d]">{formatRelativeTime(tx.timestamp)}</td>
+                    </tr>
+                  ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-[#8a948b]">
-                      No recent activity is available in the selected window yet.
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-[#8a948b]">
+                      No transactions observed yet.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+          <QueryDisclosure query={QUERIES.liveCounts} />
+        </div>
+
+        <div className="rounded-[28px] border border-[#e8ebe4] bg-[#fbfcf8] p-5 shadow-[0_12px_28px_rgba(28,41,26,0.04)]">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-[#1a271c]">Most active addresses</h2>
+            <SourceTag engine="postgres" />
+          </div>
+          <p className="mt-1 text-sm text-[#7b867c]">By transactions sent and received, over all observed data.</p>
+          <div className="mt-4 space-y-2">
+            {topAddresses.length ? (
+              topAddresses.map((item, index) => (
+                <Link
+                  key={item.address}
+                  href={`/accounts/${item.address}`}
+                  className="flex items-center justify-between gap-3 rounded-[18px] border border-[#ecefe8] bg-white px-4 py-3 transition hover:border-[#b4cda8] hover:bg-[#f6faf1]"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="w-4 text-xs tabular-nums text-[#9aa59b]">{index + 1}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-[#1c2a1d]">{item.entity_name || formatAddress(item.address, 6)}</span>
+                      <span className="block text-xs text-[#7e887f]">{item.is_contract ? "contract" : "wallet"} · last seen {formatRelativeTime(item.last_seen)}</span>
+                    </span>
+                  </span>
+                  <span className="text-right text-sm font-semibold tabular-nums text-[#1c2a1d]">
+                    {formatExact(item.total_count)}
+                    <span className="block text-[11px] font-normal text-[#8a948b]">{formatExact(item.sent_count)} out · {formatExact(item.received_count)} in</span>
+                  </span>
+                </Link>
+              ))
+            ) : (
+              <div className="rounded-[18px] border border-dashed border-[#dbe3d8] bg-[#f8faf5] px-4 py-6 text-sm text-[#627065]">
+                No address activity yet.
+              </div>
+            )}
           </div>
         </div>
       </section>

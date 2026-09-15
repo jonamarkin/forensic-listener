@@ -17,6 +17,9 @@ coverage/
 .env.*.local
 web/.env.local
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # Node / Next.js
 node_modules/
 web/node_modules/
